@@ -1,0 +1,261 @@
+{
+  "summary": {
+    "totalAsianOriginRemoved": 5859,
+    "totalFemaleRemoved": 8605,
+    "totalBothRemoved": 1083,
+    "totalRemoved": 15547,
+    "totalKept": 38896
+  },
+  "byState": {
+    "Alabama": {
+      "asianOrigin": 13,
+      "female": 41,
+      "both": 2
+    },
+    "Alaska": {
+      "asianOrigin": 0,
+      "female": 1,
+      "both": 0
+    },
+    "Arizona": {
+      "asianOrigin": 67,
+      "female": 133,
+      "both": 13
+    },
+    "Arkansas": {
+      "asianOrigin": 25,
+      "female": 42,
+      "both": 2
+    },
+    "California": {
+      "asianOrigin": 1461,
+      "female": 1521,
+      "both": 286
+    },
+    "Colorado": {
+      "asianOrigin": 79,
+      "female": 231,
+      "both": 21
+    },
+    "Connecticut": {
+      "asianOrigin": 29,
+      "female": 70,
+      "both": 6
+    },
+    "Delaware": {
+      "asianOrigin": 12,
+      "female": 22,
+      "both": 2
+    },
+    "Florida": {
+      "asianOrigin": 358,
+      "female": 498,
+      "both": 56
+    },
+    "Georgia": {
+      "asianOrigin": 178,
+      "female": 371,
+      "both": 24
+    },
+    "Hawaii": {
+      "asianOrigin": 11,
+      "female": 16,
+      "both": 2
+    },
+    "Idaho": {
+      "asianOrigin": 5,
+      "female": 16,
+      "both": 0
+    },
+    "Illinois": {
+      "asianOrigin": 240,
+      "female": 403,
+      "both": 52
+    },
+    "Indiana": {
+      "asianOrigin": 45,
+      "female": 84,
+      "both": 8
+    },
+    "Iowa": {
+      "asianOrigin": 11,
+      "female": 31,
+      "both": 2
+    },
+    "Kansas": {
+      "asianOrigin": 17,
+      "female": 38,
+      "both": 2
+    },
+    "Kentucky": {
+      "asianOrigin": 21,
+      "female": 41,
+      "both": 5
+    },
+    "Louisiana": {
+      "asianOrigin": 7,
+      "female": 20,
+      "both": 1
+    },
+    "Maine": {
+      "asianOrigin": 6,
+      "female": 15,
+      "both": 1
+    },
+    "Maryland": {
+      "asianOrigin": 80,
+      "female": 144,
+      "both": 18
+    },
+    "Massachusetts": {
+      "asianOrigin": 178,
+      "female": 253,
+      "both": 41
+    },
+    "Michigan": {
+      "asianOrigin": 69,
+      "female": 152,
+      "both": 14
+    },
+    "Minnesota": {
+      "asianOrigin": 36,
+      "female": 89,
+      "both": 5
+    },
+    "Mississippi": {
+      "asianOrigin": 3,
+      "female": 12,
+      "both": 1
+    },
+    "Missouri": {
+      "asianOrigin": 38,
+      "female": 94,
+      "both": 6
+    },
+    "Montana": {
+      "asianOrigin": 2,
+      "female": 7,
+      "both": 1
+    },
+    "Nebraska": {
+      "asianOrigin": 9,
+      "female": 16,
+      "both": 0
+    },
+    "Nevada": {
+      "asianOrigin": 45,
+      "female": 64,
+      "both": 3
+    },
+    "New Hampshire": {
+      "asianOrigin": 13,
+      "female": 23,
+      "both": 0
+    },
+    "New Jersey": {
+      "asianOrigin": 289,
+      "female": 321,
+      "both": 61
+    },
+    "New Mexico": {
+      "asianOrigin": 7,
+      "female": 12,
+      "both": 2
+    },
+    "New York": {
+      "asianOrigin": 589,
+      "female": 738,
+      "both": 101
+    },
+    "North Carolina": {
+      "asianOrigin": 126,
+      "female": 295,
+      "both": 31
+    },
+    "North Dakota": {
+      "asianOrigin": 4,
+      "female": 2,
+      "both": 0
+    },
+    "Ohio": {
+      "asianOrigin": 59,
+      "female": 144,
+      "both": 18
+    },
+    "Oklahoma": {
+      "asianOrigin": 17,
+      "female": 35,
+      "both": 5
+    },
+    "Oregon": {
+      "asianOrigin": 92,
+      "female": 161,
+      "both": 11
+    },
+    "Pennsylvania": {
+      "asianOrigin": 109,
+      "female": 208,
+      "both": 19
+    },
+    "Rhode Island": {
+      "asianOrigin": 5,
+      "female": 18,
+      "both": 1
+    },
+    "South Carolina": {
+      "asianOrigin": 23,
+      "female": 68,
+      "both": 5
+    },
+    "South Dakota": {
+      "asianOrigin": 1,
+      "female": 6,
+      "both": 0
+    },
+    "Tennessee": {
+      "asianOrigin": 33,
+      "female": 108,
+      "both": 3
+    },
+    "Texas": {
+      "asianOrigin": 891,
+      "female": 1264,
+      "both": 145
+    },
+    "Utah": {
+      "asianOrigin": 36,
+      "female": 60,
+      "both": 3
+    },
+    "Vermont": {
+      "asianOrigin": 3,
+      "female": 7,
+      "both": 0
+    },
+    "Virginia": {
+      "asianOrigin": 159,
+      "female": 244,
+      "both": 34
+    },
+    "Washington": {
+      "asianOrigin": 322,
+      "female": 405,
+      "both": 64
+    },
+    "West Virginia": {
+      "asianOrigin": 2,
+      "female": 12,
+      "both": 0
+    },
+    "Wisconsin": {
+      "asianOrigin": 31,
+      "female": 43,
+      "both": 5
+    },
+    "Wyoming": {
+      "asianOrigin": 3,
+      "female": 6,
+      "both": 1
+    }
+  }
+}

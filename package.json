@@ -1,0 +1,13 @@
+{
+  "name": "braintrust-profile-downloader",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Download Braintrust freelancer profiles and persist them to local files and MongoDB.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "download": "node download_braintrust_profiles.js"
+  },
+  "dependencies": {
+    "mongodb": "^7.1.1"
+  }
+}
