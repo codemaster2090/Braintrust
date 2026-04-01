@@ -14,12 +14,18 @@ try {
 
 const BASE_URL = "https://app.usebraintrust.com";
 const API_PREFIX = "/api/freelancers/";
-const DEFAULT_CONCURRENCY = 4;
+const DEFAULT_CONCURRENCY = 2;
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_RETRIES = 5;
 const DEFAULT_RETRY_BASE_MS = 1000;
 const DEFAULT_LOG_EVERY = 25;
 const DEFAULT_MAX_ERRORS = 1000;
+const DEFAULT_MIN_REQUEST_GAP_MS = 900;
+const DEFAULT_MAX_REQUEST_GAP_MS = 20000;
+const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 60000;
+const DEFAULT_MAX_RATE_LIMIT_COOLDOWN_MS = 900000;
+const DEFAULT_TRANSIENT_ERROR_COOLDOWN_MS = 10000;
+const DEFAULT_RECOVERY_SUCCESS_COUNT = 25;
 const DEFAULT_MONGO_URI =
   process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb://localhost:27017/";
 const DEFAULT_MONGO_DB = process.env.MONGO_DB || "braintrust";
@@ -59,6 +65,7 @@ async function main() {
   const selectedProfiles = applySelection(parsed.profiles, options.offset, options.limit);
   const cookieHeader = await getCookieHeader(options);
   let mongoSink = null;
+  const rateController = createRateController(options);
 
   try {
     mongoSink = await createMongoSink(options);
@@ -83,6 +90,7 @@ async function main() {
       selected_profiles: selectedProfiles.length,
       duplicate_profile_rows: parsed.duplicateRowCount,
       mongo: mongoSink ? mongoSink.getSummary() : { enabled: false },
+      throttle: rateController.getSummary(),
     };
 
     await writeJsonAtomic(manifestFile, initialManifest);
@@ -116,6 +124,7 @@ async function main() {
         outputDir,
         runStartedAt,
         mongoSink,
+        rateController,
       });
     } else if (mongoSink) {
       await syncLocalProfilesToMongo({
@@ -142,6 +151,7 @@ async function main() {
       download: downloadSummary,
       aggregate: aggregateSummary,
       mongo: mongoSink ? mongoSink.getSummary() : { enabled: false },
+      throttle: rateController.getSummary(),
       invalid_rows_preview: parsed.invalidRows.slice(0, 25),
     };
 
@@ -151,6 +161,7 @@ async function main() {
       status: downloadSummary.failed > 0 ? "completed_with_errors" : "completed",
       ...downloadSummary,
       mongo: mongoSink ? mongoSink.getSummary() : null,
+      throttle: rateController.getSummary(),
     });
     await writeJsonAtomic(manifestFile, finalManifest);
 
@@ -171,6 +182,10 @@ async function main() {
         `Mongo target:  ${mongoSummary.database}.${mongoSummary.collection} @ ${mongoSummary.uri}`
       );
     }
+    const throttleSummary = rateController.getSummary();
+    console.log(
+      `Throttle:      gap=${throttleSummary.current_request_gap_ms}ms, rate_limits=${throttleSummary.rate_limit_hits}`
+    );
     console.log(`NDJSON:        ${detailsNdjsonFile}`);
     console.log(`Flat CSV:      ${flatCsvFile}`);
 
@@ -192,6 +207,11 @@ function parseArgs(argv) {
     retryBaseMs: DEFAULT_RETRY_BASE_MS,
     logEvery: DEFAULT_LOG_EVERY,
     maxErrors: DEFAULT_MAX_ERRORS,
+    minRequestGapMs: DEFAULT_MIN_REQUEST_GAP_MS,
+    maxRequestGapMs: DEFAULT_MAX_REQUEST_GAP_MS,
+    rateLimitCooldownMs: DEFAULT_RATE_LIMIT_COOLDOWN_MS,
+    maxRateLimitCooldownMs: DEFAULT_MAX_RATE_LIMIT_COOLDOWN_MS,
+    transientErrorCooldownMs: DEFAULT_TRANSIENT_ERROR_COOLDOWN_MS,
     mongoUri: DEFAULT_MONGO_URI,
     mongoDb: DEFAULT_MONGO_DB,
     mongoCollection: DEFAULT_MONGO_COLLECTION,
@@ -265,6 +285,27 @@ function parseArgs(argv) {
       case "max-errors":
         options.maxErrors = toPositiveInteger(nextValue, "--max-errors");
         break;
+      case "min-request-gap-ms":
+        options.minRequestGapMs = toNonNegativeInteger(nextValue, "--min-request-gap-ms");
+        break;
+      case "max-request-gap-ms":
+        options.maxRequestGapMs = toPositiveInteger(nextValue, "--max-request-gap-ms");
+        break;
+      case "rate-limit-cooldown-ms":
+        options.rateLimitCooldownMs = toPositiveInteger(nextValue, "--rate-limit-cooldown-ms");
+        break;
+      case "max-rate-limit-cooldown-ms":
+        options.maxRateLimitCooldownMs = toPositiveInteger(
+          nextValue,
+          "--max-rate-limit-cooldown-ms"
+        );
+        break;
+      case "transient-error-cooldown-ms":
+        options.transientErrorCooldownMs = toPositiveInteger(
+          nextValue,
+          "--transient-error-cooldown-ms"
+        );
+        break;
       case "mongo-uri":
         options.mongoUri = nextValue;
         break;
@@ -294,6 +335,16 @@ function parseArgs(argv) {
     }
   }
 
+  if (options.maxRequestGapMs < options.minRequestGapMs) {
+    throw new Error("--max-request-gap-ms must be greater than or equal to --min-request-gap-ms.");
+  }
+
+  if (options.maxRateLimitCooldownMs < options.rateLimitCooldownMs) {
+    throw new Error(
+      "--max-rate-limit-cooldown-ms must be greater than or equal to --rate-limit-cooldown-ms."
+    );
+  }
+
   return options;
 }
 
@@ -311,6 +362,11 @@ Options:
   --retry-base-ms <n>     Base backoff in milliseconds. Default: ${DEFAULT_RETRY_BASE_MS}
   --log-every <n>         Progress log cadence. Default: ${DEFAULT_LOG_EVERY}
   --max-errors <n>        Stop after this many failed profiles. Default: ${DEFAULT_MAX_ERRORS}
+  --min-request-gap-ms    Minimum delay between request starts. Default: ${DEFAULT_MIN_REQUEST_GAP_MS}
+  --max-request-gap-ms    Maximum adaptive delay between request starts. Default: ${DEFAULT_MAX_REQUEST_GAP_MS}
+  --rate-limit-cooldown-ms  Shared pause after 429/rate-limit. Default: ${DEFAULT_RATE_LIMIT_COOLDOWN_MS}
+  --max-rate-limit-cooldown-ms  Max shared pause after repeated 429s. Default: ${DEFAULT_MAX_RATE_LIMIT_COOLDOWN_MS}
+  --transient-error-cooldown-ms  Shared pause after network/5xx issues. Default: ${DEFAULT_TRANSIENT_ERROR_COOLDOWN_MS}
   --mongo-uri <uri>       MongoDB connection string. Default: ${DEFAULT_MONGO_URI}
   --mongo-db <name>       Mongo database name. Default: ${DEFAULT_MONGO_DB}
   --mongo-collection <n>  Mongo collection name. Default: ${DEFAULT_MONGO_COLLECTION}
@@ -327,6 +383,7 @@ Options:
 Examples:
   node download_braintrust_profiles.js --input braintrust_developers_2026-04-01T17-58-21-624Z_filtered.csv
   node download_braintrust_profiles.js --concurrency 6 --limit 500
+  node download_braintrust_profiles.js --concurrency 1 --min-request-gap-ms 1500
   node download_braintrust_profiles.js --mongo-uri mongodb://localhost:27017/ --mongo-db braintrust --mongo-collection profiles
   node download_braintrust_profiles.js --out ./run_01 --force
   node download_braintrust_profiles.js --summary-only --out ./braintrust_profile_details
@@ -546,6 +603,7 @@ async function downloadProfiles(params) {
     outputDir,
     runStartedAt,
     mongoSink,
+    rateController,
   } = params;
 
   let nextIndex = 0;
@@ -568,6 +626,7 @@ async function downloadProfiles(params) {
     output_dir: outputDir,
     ...summary,
     mongo: mongoSink ? mongoSink.getSummary() : null,
+    throttle: rateController.getSummary(),
   });
 
   const workers = Array.from({ length: options.concurrency }, (_, workerIndex) =>
@@ -605,6 +664,7 @@ async function downloadProfiles(params) {
           retries: options.retries,
           retryBaseMs: options.retryBaseMs,
           cookieHeader,
+          rateController,
         });
 
         const wrapper = {
@@ -676,11 +736,13 @@ async function downloadProfiles(params) {
       reason,
       ...summary,
       mongo: mongoSink ? mongoSink.getSummary() : null,
+      throttle: rateController.getSummary(),
     };
 
     await writeJsonAtomic(progressFile, payload);
+    const throttle = payload.throttle || {};
     console.log(
-      `[progress] ${summary.processed}/${summary.total} processed | downloaded=${summary.downloaded} skipped=${summary.skipped_existing} failed=${summary.failed}`
+      `[progress] ${summary.processed}/${summary.total} processed | downloaded=${summary.downloaded} skipped=${summary.skipped_existing} failed=${summary.failed} | gap=${throttle.current_request_gap_ms || 0}ms pause=${throttle.pause_remaining_ms || 0}ms rateLimits=${throttle.rate_limit_hits || 0}`
     );
   }
 
@@ -807,8 +869,167 @@ async function createMongoSink(options) {
   }
 }
 
+function createRateController(options) {
+  const state = {
+    enabled: true,
+    minRequestGapMs: options.minRequestGapMs,
+    currentRequestGapMs: options.minRequestGapMs,
+    maxRequestGapMs: options.maxRequestGapMs,
+    initialRateLimitCooldownMs: options.rateLimitCooldownMs,
+    currentRateLimitCooldownMs: options.rateLimitCooldownMs,
+    maxRateLimitCooldownMs: options.maxRateLimitCooldownMs,
+    transientErrorCooldownMs: options.transientErrorCooldownMs,
+    recoverySuccessCount: DEFAULT_RECOVERY_SUCCESS_COUNT,
+    nextRequestAt: 0,
+    pauseUntil: 0,
+    totalReservations: 0,
+    totalWaitMs: 0,
+    consecutiveSuccesses: 0,
+    consecutiveRateLimits: 0,
+    rateLimitHits: 0,
+    transientFailureHits: 0,
+    lastEvent: null,
+  };
+
+  let reservationQueue = Promise.resolve();
+
+  return {
+    async reserve(label) {
+      const reservation = reservationQueue.then(async () => {
+        while (true) {
+          const now = Date.now();
+          const waitMs = Math.max(0, state.pauseUntil - now, state.nextRequestAt - now);
+
+          if (waitMs <= 0) {
+            const grantedAt = Date.now();
+            state.nextRequestAt = grantedAt + state.currentRequestGapMs;
+            state.totalReservations += 1;
+            state.lastEvent = {
+              type: "reserve",
+              at: new Date(grantedAt).toISOString(),
+              label,
+            };
+            return;
+          }
+
+          state.totalWaitMs += waitMs;
+          await sleep(waitMs);
+        }
+      });
+
+      reservationQueue = reservation.catch(() => {});
+      return reservation;
+    },
+
+    noteSuccess() {
+      state.consecutiveSuccesses += 1;
+      state.consecutiveRateLimits = 0;
+
+      if (
+        state.consecutiveSuccesses >= state.recoverySuccessCount &&
+        state.currentRequestGapMs > state.minRequestGapMs
+      ) {
+        state.currentRequestGapMs = Math.max(
+          state.minRequestGapMs,
+          Math.floor(state.currentRequestGapMs * 0.9)
+        );
+        state.currentRateLimitCooldownMs = Math.max(
+          state.initialRateLimitCooldownMs,
+          Math.floor(state.currentRateLimitCooldownMs * 0.85)
+        );
+        state.consecutiveSuccesses = 0;
+        state.lastEvent = {
+          type: "recover",
+          at: new Date().toISOString(),
+          current_request_gap_ms: state.currentRequestGapMs,
+          current_rate_limit_cooldown_ms: state.currentRateLimitCooldownMs,
+        };
+      }
+    },
+
+    noteRateLimit(error) {
+      state.rateLimitHits += 1;
+      state.consecutiveRateLimits += 1;
+      state.consecutiveSuccesses = 0;
+
+      const cooldownMs = Math.min(
+        state.maxRateLimitCooldownMs,
+        Math.max(error?.retryAfterMs || 0, state.currentRateLimitCooldownMs)
+      );
+
+      state.pauseUntil = Math.max(state.pauseUntil, Date.now() + cooldownMs);
+      state.currentRequestGapMs = Math.min(
+        state.maxRequestGapMs,
+        Math.max(
+          state.currentRequestGapMs + state.minRequestGapMs,
+          Math.floor(state.currentRequestGapMs * 1.5)
+        )
+      );
+      state.currentRateLimitCooldownMs = Math.min(
+        state.maxRateLimitCooldownMs,
+        Math.max(
+          state.initialRateLimitCooldownMs,
+          Math.floor(state.currentRateLimitCooldownMs * 2)
+        )
+      );
+      state.lastEvent = {
+        type: "rate_limit",
+        at: new Date().toISOString(),
+        status: error?.status || null,
+        cooldown_ms: cooldownMs,
+        current_request_gap_ms: state.currentRequestGapMs,
+        retry_after_ms: error?.retryAfterMs ?? null,
+      };
+    },
+
+    noteTransientFailure(error) {
+      state.transientFailureHits += 1;
+      state.consecutiveSuccesses = 0;
+
+      const cooldownMs = Math.max(0, state.transientErrorCooldownMs);
+      if (cooldownMs > 0) {
+        state.pauseUntil = Math.max(state.pauseUntil, Date.now() + cooldownMs);
+      }
+
+      state.currentRequestGapMs = Math.min(
+        state.maxRequestGapMs,
+        Math.max(state.minRequestGapMs, state.currentRequestGapMs + 250)
+      );
+      state.lastEvent = {
+        type: "transient_failure",
+        at: new Date().toISOString(),
+        status: error?.status || null,
+        cooldown_ms: cooldownMs,
+        current_request_gap_ms: state.currentRequestGapMs,
+        error_name: error?.name || "Error",
+      };
+    },
+
+    getSummary() {
+      return {
+        enabled: state.enabled,
+        min_request_gap_ms: state.minRequestGapMs,
+        current_request_gap_ms: state.currentRequestGapMs,
+        max_request_gap_ms: state.maxRequestGapMs,
+        rate_limit_cooldown_ms: state.currentRateLimitCooldownMs,
+        max_rate_limit_cooldown_ms: state.maxRateLimitCooldownMs,
+        transient_error_cooldown_ms: state.transientErrorCooldownMs,
+        pause_remaining_ms: Math.max(0, state.pauseUntil - Date.now()),
+        next_request_in_ms: Math.max(0, state.nextRequestAt - Date.now()),
+        total_reservations: state.totalReservations,
+        total_wait_ms: state.totalWaitMs,
+        rate_limit_hits: state.rateLimitHits,
+        transient_failure_hits: state.transientFailureHits,
+        consecutive_rate_limits: state.consecutiveRateLimits,
+        last_event: state.lastEvent,
+      };
+    },
+  };
+}
+
 async function fetchProfileWithRetries(params) {
-  const { profileId, apiUrl, timeoutMs, retries, retryBaseMs, cookieHeader } = params;
+  const { profileId, apiUrl, timeoutMs, retries, retryBaseMs, cookieHeader, rateController } =
+    params;
 
   let attempt = 0;
   let lastError = null;
@@ -818,6 +1039,8 @@ async function fetchProfileWithRetries(params) {
     const startedAt = Date.now();
 
     try {
+      await rateController.reserve(`profile:${profileId}:attempt:${attempt}`);
+
       const headers = {
         accept: "application/json, text/plain, */*",
         "user-agent": USER_AGENT,
@@ -858,6 +1081,8 @@ async function fetchProfileWithRetries(params) {
         throw parseError;
       }
 
+      rateController.noteSuccess();
+
       return {
         data,
         attempts: attempt,
@@ -870,6 +1095,13 @@ async function fetchProfileWithRetries(params) {
       };
     } catch (error) {
       lastError = error;
+
+      if (isRateLimitError(error)) {
+        rateController.noteRateLimit(error);
+      } else if (isRetriableError(error)) {
+        rateController.noteTransientFailure(error);
+      }
+
       const shouldRetry = isRetriableError(error) && attempt <= retries;
 
       if (!shouldRetry) {
@@ -907,6 +1139,30 @@ function isRetriableError(error) {
   }
 
   return true;
+}
+
+function isRateLimitError(error) {
+  if (!error) {
+    return false;
+  }
+
+  if (error.status === 429) {
+    return true;
+  }
+
+  if (error.status === 403 || error.status === 503) {
+    const text = String(error.responseText || "").toLowerCase();
+    return (
+      text.includes("rate limit") ||
+      text.includes("too many requests") ||
+      text.includes("temporarily blocked") ||
+      text.includes("captcha") ||
+      text.includes("access denied") ||
+      text.includes("cloudflare")
+    );
+  }
+
+  return false;
 }
 
 function getBackoffMs({ attempt, retryBaseMs, retryAfterMs }) {
@@ -1178,6 +1434,7 @@ function serializeError(error) {
     name: error?.name || "Error",
     message: error?.message || String(error),
     status: error?.status,
+    retry_after_ms: error?.retryAfterMs,
     response_text: error?.responseText,
     stack: error?.stack,
   };
@@ -1193,6 +1450,11 @@ function sanitizeOptionsForManifest(options) {
     retry_base_ms: options.retryBaseMs,
     log_every: options.logEvery,
     max_errors: options.maxErrors,
+    min_request_gap_ms: options.minRequestGapMs,
+    max_request_gap_ms: options.maxRequestGapMs,
+    rate_limit_cooldown_ms: options.rateLimitCooldownMs,
+    max_rate_limit_cooldown_ms: options.maxRateLimitCooldownMs,
+    transient_error_cooldown_ms: options.transientErrorCooldownMs,
     mongo_enabled: options.mongoEnabled,
     mongo_uri: redactMongoUri(options.mongoUri),
     mongo_db: options.mongoDb,
