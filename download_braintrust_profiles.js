@@ -4,7 +4,10 @@
 const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
+const { execFile } = require("child_process");
+const { promisify } = require("util");
 let MongoClient;
+const execFileAsync = promisify(execFile);
 
 try {
   ({ MongoClient } = require("mongodb"));
@@ -26,6 +29,12 @@ const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 60000;
 const DEFAULT_MAX_RATE_LIMIT_COOLDOWN_MS = 900000;
 const DEFAULT_TRANSIENT_ERROR_COOLDOWN_MS = 10000;
 const DEFAULT_RECOVERY_SUCCESS_COUNT = 25;
+const DEFAULT_RESUME_LOOKBACK = 20;
+const DEFAULT_MULLVAD_COMMAND = process.platform === "win32" ? "mullvad.exe" : "mullvad";
+const DEFAULT_MULLVAD_ROTATE_ON_RATE_LIMIT = true;
+const DEFAULT_MULLVAD_RECONNECT_ATTEMPTS = 4;
+const DEFAULT_MULLVAD_RECONNECT_TIMEOUT_MS = 120000;
+const DEFAULT_MULLVAD_SETTLE_MS = 5000;
 const DEFAULT_MONGO_URI =
   process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb://localhost:27017/";
 const DEFAULT_MONGO_DB = process.env.MONGO_DB || "braintrust";
@@ -64,10 +73,22 @@ async function main() {
   const parsed = buildProfileIndex(parseCsv(csvText));
   const selectedProfiles = applySelection(parsed.profiles, options.offset, options.limit);
   const cookieHeader = await getCookieHeader(options);
+  const resumeState = await resolveResumeState({
+    progressFile,
+    inputCsv: resolvedInputPath,
+    outputDir,
+    profiles: selectedProfiles,
+    profilesRoot,
+    options,
+  });
   let mongoSink = null;
-  const rateController = createRateController(options);
+  const stopController = createStopController();
+  let vpnController = null;
+  let rateController = null;
 
   try {
+    vpnController = await createVpnController(options);
+    rateController = createRateController(options, vpnController);
     mongoSink = await createMongoSink(options);
 
     const runStartedAt = new Date().toISOString();
@@ -91,6 +112,8 @@ async function main() {
       duplicate_profile_rows: parsed.duplicateRowCount,
       mongo: mongoSink ? mongoSink.getSummary() : { enabled: false },
       throttle: rateController.getSummary(),
+      vpn: vpnController ? vpnController.getSummary() : { enabled: false },
+      resume: resumeState.summary,
     };
 
     await writeJsonAtomic(manifestFile, initialManifest);
@@ -110,7 +133,16 @@ async function main() {
       stopped_early: false,
     };
 
-    await fsp.writeFile(errorsFile, "", "utf8");
+    if (!resumeState.enabled) {
+      await fsp.writeFile(errorsFile, "", "utf8");
+    } else {
+      await appendNdjson(errorsFile, {
+        type: "resume",
+        resumed_at: new Date().toISOString(),
+        start_index: resumeState.startIndex,
+        checkpoint_status: resumeState.previous?.status || null,
+      });
+    }
 
     if (!options.summaryOnly) {
       downloadSummary = await downloadProfiles({
@@ -125,6 +157,9 @@ async function main() {
         runStartedAt,
         mongoSink,
         rateController,
+        vpnController,
+        stopController,
+        startIndex: resumeState.startIndex,
       });
     } else if (mongoSink) {
       await syncLocalProfilesToMongo({
@@ -137,13 +172,23 @@ async function main() {
       });
     }
 
-    const aggregateSummary = await buildAggregateOutputs({
-      profiles: selectedProfiles,
-      outputDir,
-      profilesRoot,
-      detailsNdjsonFile,
-      flatCsvFile,
-    });
+    const runCompleted = downloadSummary.next_index >= downloadSummary.total;
+
+    const aggregateSummary =
+      !runCompleted || downloadSummary.stopped_by_signal || downloadSummary.stopped_early
+        ? {
+            skipped: true,
+            reason: downloadSummary.stopped_by_signal
+              ? "run_stopped_by_signal"
+              : "run_incomplete",
+          }
+        : await buildAggregateOutputs({
+            profiles: selectedProfiles,
+            outputDir,
+            profilesRoot,
+            detailsNdjsonFile,
+            flatCsvFile,
+          });
 
     const finalManifest = {
       ...initialManifest,
@@ -152,16 +197,26 @@ async function main() {
       aggregate: aggregateSummary,
       mongo: mongoSink ? mongoSink.getSummary() : { enabled: false },
       throttle: rateController.getSummary(),
+      vpn: vpnController ? vpnController.getSummary() : { enabled: false },
       invalid_rows_preview: parsed.invalidRows.slice(0, 25),
     };
+
+    const finalStatus = downloadSummary.stopped_by_signal
+      ? "stopped_by_signal"
+      : !runCompleted
+        ? "stopped_early"
+        : downloadSummary.failed > 0
+          ? "completed_with_errors"
+          : "completed";
 
     await writeJsonAtomic(progressFile, {
       started_at: runStartedAt,
       completed_at: finalManifest.completed_at,
-      status: downloadSummary.failed > 0 ? "completed_with_errors" : "completed",
+      status: finalStatus,
       ...downloadSummary,
       mongo: mongoSink ? mongoSink.getSummary() : null,
       throttle: rateController.getSummary(),
+      vpn: vpnController ? vpnController.getSummary() : null,
     });
     await writeJsonAtomic(manifestFile, finalManifest);
 
@@ -186,13 +241,22 @@ async function main() {
     console.log(
       `Throttle:      gap=${throttleSummary.current_request_gap_ms}ms, rate_limits=${throttleSummary.rate_limit_hits}`
     );
+    if (vpnController) {
+      const vpnSummary = vpnController.getSummary();
+      console.log(
+        `VPN:           rotations=${vpnSummary.rotations_completed}, current_ip=${vpnSummary.current_ip || "unknown"}`
+      );
+    }
     console.log(`NDJSON:        ${detailsNdjsonFile}`);
     console.log(`Flat CSV:      ${flatCsvFile}`);
 
-    if (downloadSummary.failed > 0) {
+    if (downloadSummary.stopped_by_signal) {
+      process.exitCode = 130;
+    } else if (downloadSummary.failed > 0) {
       process.exitCode = 2;
     }
   } finally {
+    stopController.dispose();
     if (mongoSink) {
       await mongoSink.close();
     }
@@ -212,6 +276,13 @@ function parseArgs(argv) {
     rateLimitCooldownMs: DEFAULT_RATE_LIMIT_COOLDOWN_MS,
     maxRateLimitCooldownMs: DEFAULT_MAX_RATE_LIMIT_COOLDOWN_MS,
     transientErrorCooldownMs: DEFAULT_TRANSIENT_ERROR_COOLDOWN_MS,
+    resume: true,
+    resumeLookback: DEFAULT_RESUME_LOOKBACK,
+    mullvadRotateOnRateLimit: DEFAULT_MULLVAD_ROTATE_ON_RATE_LIMIT,
+    mullvadCommand: DEFAULT_MULLVAD_COMMAND,
+    mullvadReconnectAttempts: DEFAULT_MULLVAD_RECONNECT_ATTEMPTS,
+    mullvadReconnectTimeoutMs: DEFAULT_MULLVAD_RECONNECT_TIMEOUT_MS,
+    mullvadSettleMs: DEFAULT_MULLVAD_SETTLE_MS,
     mongoUri: DEFAULT_MONGO_URI,
     mongoDb: DEFAULT_MONGO_DB,
     mongoCollection: DEFAULT_MONGO_COLLECTION,
@@ -246,6 +317,16 @@ function parseArgs(argv) {
 
     if (arg === "--no-mongo") {
       options.mongoEnabled = false;
+      continue;
+    }
+
+    if (arg === "--no-resume") {
+      options.resume = false;
+      continue;
+    }
+
+    if (arg === "--no-mullvad-rotate") {
+      options.mullvadRotateOnRateLimit = false;
       continue;
     }
 
@@ -305,6 +386,27 @@ function parseArgs(argv) {
           nextValue,
           "--transient-error-cooldown-ms"
         );
+        break;
+      case "resume-lookback":
+        options.resumeLookback = toNonNegativeInteger(nextValue, "--resume-lookback");
+        break;
+      case "mullvad-command":
+        options.mullvadCommand = nextValue;
+        break;
+      case "mullvad-reconnect-attempts":
+        options.mullvadReconnectAttempts = toPositiveInteger(
+          nextValue,
+          "--mullvad-reconnect-attempts"
+        );
+        break;
+      case "mullvad-reconnect-timeout-ms":
+        options.mullvadReconnectTimeoutMs = toPositiveInteger(
+          nextValue,
+          "--mullvad-reconnect-timeout-ms"
+        );
+        break;
+      case "mullvad-settle-ms":
+        options.mullvadSettleMs = toNonNegativeInteger(nextValue, "--mullvad-settle-ms");
         break;
       case "mongo-uri":
         options.mongoUri = nextValue;
@@ -367,6 +469,13 @@ Options:
   --rate-limit-cooldown-ms  Shared pause after 429/rate-limit. Default: ${DEFAULT_RATE_LIMIT_COOLDOWN_MS}
   --max-rate-limit-cooldown-ms  Max shared pause after repeated 429s. Default: ${DEFAULT_MAX_RATE_LIMIT_COOLDOWN_MS}
   --transient-error-cooldown-ms  Shared pause after network/5xx issues. Default: ${DEFAULT_TRANSIENT_ERROR_COOLDOWN_MS}
+  --no-resume              Ignore saved checkpoint and start from the beginning.
+  --resume-lookback <n>    Recheck the last N indices before saved position. Default: ${DEFAULT_RESUME_LOOKBACK}
+  --no-mullvad-rotate      Disable Mullvad IP rotation on rate limits.
+  --mullvad-command <cmd>  Mullvad CLI command. Default: ${DEFAULT_MULLVAD_COMMAND}
+  --mullvad-reconnect-attempts <n>  Mullvad reconnect attempts per rotation. Default: ${DEFAULT_MULLVAD_RECONNECT_ATTEMPTS}
+  --mullvad-reconnect-timeout-ms <n>  Timeout for each Mullvad reconnect. Default: ${DEFAULT_MULLVAD_RECONNECT_TIMEOUT_MS}
+  --mullvad-settle-ms <n>  Wait after reconnect before resuming. Default: ${DEFAULT_MULLVAD_SETTLE_MS}
   --mongo-uri <uri>       MongoDB connection string. Default: ${DEFAULT_MONGO_URI}
   --mongo-db <name>       Mongo database name. Default: ${DEFAULT_MONGO_DB}
   --mongo-collection <n>  Mongo collection name. Default: ${DEFAULT_MONGO_COLLECTION}
@@ -384,6 +493,7 @@ Examples:
   node download_braintrust_profiles.js --input braintrust_developers_2026-04-01T17-58-21-624Z_filtered.csv
   node download_braintrust_profiles.js --concurrency 6 --limit 500
   node download_braintrust_profiles.js --concurrency 1 --min-request-gap-ms 1500
+  node download_braintrust_profiles.js --resume-lookback 50
   node download_braintrust_profiles.js --mongo-uri mongodb://localhost:27017/ --mongo-db braintrust --mongo-collection profiles
   node download_braintrust_profiles.js --out ./run_01 --force
   node download_braintrust_profiles.js --summary-only --out ./braintrust_profile_details
@@ -604,19 +714,26 @@ async function downloadProfiles(params) {
     runStartedAt,
     mongoSink,
     rateController,
+    vpnController,
+    stopController,
+    startIndex,
   } = params;
 
-  let nextIndex = 0;
+  let nextIndex = startIndex;
   let stopRequested = false;
   let lastLoggedAt = 0;
 
   const summary = {
     total: profiles.length,
+    start_index: startIndex,
     downloaded: 0,
     skipped_existing: 0,
     failed: 0,
     processed: 0,
     stopped_early: false,
+    stopped_by_signal: false,
+    stop_signal: null,
+    next_index: nextIndex,
   };
 
   await writeJsonAtomic(progressFile, {
@@ -627,21 +744,36 @@ async function downloadProfiles(params) {
     ...summary,
     mongo: mongoSink ? mongoSink.getSummary() : null,
     throttle: rateController.getSummary(),
+    vpn: vpnController ? vpnController.getSummary() : null,
   });
 
   const workers = Array.from({ length: options.concurrency }, (_, workerIndex) =>
     runWorker(workerIndex + 1)
   );
   await Promise.all(workers);
+  summary.next_index = Math.min(nextIndex, profiles.length);
+  summary.stopped_by_signal = Boolean(stopController.signal);
+  summary.stop_signal = stopController.signal;
 
   async function runWorker(workerId) {
     while (!stopRequested) {
-      const currentIndex = nextIndex;
-      nextIndex += 1;
-
-      if (currentIndex >= profiles.length) {
+      if (stopController.requested) {
+        stopRequested = true;
+        summary.stopped_early = true;
+        summary.stopped_by_signal = true;
+        summary.stop_signal = stopController.signal;
+        summary.next_index = Math.min(nextIndex, profiles.length);
         return;
       }
+
+      if (nextIndex >= profiles.length) {
+        summary.next_index = profiles.length;
+        return;
+      }
+
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      summary.next_index = Math.min(nextIndex, profiles.length);
 
       const profileEntry = profiles[currentIndex];
       const profileFile = getProfileFilePath(profilesRoot, profileEntry.profile_id);
@@ -737,6 +869,7 @@ async function downloadProfiles(params) {
       ...summary,
       mongo: mongoSink ? mongoSink.getSummary() : null,
       throttle: rateController.getSummary(),
+      vpn: vpnController ? vpnController.getSummary() : null,
     };
 
     await writeJsonAtomic(progressFile, payload);
@@ -869,7 +1002,229 @@ async function createMongoSink(options) {
   }
 }
 
-function createRateController(options) {
+function createStopController() {
+  let requested = false;
+  let signal = null;
+
+  const handleSignal = (name) => {
+    if (requested) {
+      console.error(`[signal] ${name} received again. Exiting immediately.`);
+      process.exit(130);
+    }
+
+    requested = true;
+    signal = name;
+    console.error(`[signal] ${name} received. Finishing in-flight work and stopping...`);
+  };
+
+  const onSigint = () => handleSignal("SIGINT");
+  const onSigterm = () => handleSignal("SIGTERM");
+  process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigterm);
+
+  return {
+    get requested() {
+      return requested;
+    },
+    get signal() {
+      return signal;
+    },
+    dispose() {
+      process.off("SIGINT", onSigint);
+      process.off("SIGTERM", onSigterm);
+    },
+  };
+}
+
+async function resolveResumeState(params) {
+  const { progressFile, inputCsv, outputDir, profiles, profilesRoot, options } = params;
+  const base = {
+    enabled: false,
+    startIndex: 0,
+    previous: null,
+    summary: {
+      enabled: false,
+      reason: "disabled_or_unavailable",
+      start_index: 0,
+      checkpoint_next_index: 0,
+      lookback: options.resumeLookback,
+    },
+  };
+
+  if (!options.resume || options.force) {
+    return base;
+  }
+
+  const previous = await readJsonIfExists(progressFile);
+  if (!previous) {
+    return base;
+  }
+
+  const sameInput = path.resolve(previous.input_csv || "") === inputCsv;
+  const sameOutput = path.resolve(previous.output_dir || "") === outputDir;
+  const status = String(previous.status || "");
+
+  if (!sameInput || !sameOutput) {
+    return {
+      ...base,
+      previous,
+      summary: {
+        enabled: false,
+        reason: "checkpoint_mismatch",
+        start_index: 0,
+        checkpoint_next_index: 0,
+        lookback: options.resumeLookback,
+      },
+    };
+  }
+
+  if (status === "completed" || status === "completed_with_errors") {
+    return {
+      ...base,
+      previous,
+      summary: {
+        enabled: false,
+        reason: "already_completed",
+        start_index: 0,
+        checkpoint_next_index: previous.next_index || 0,
+        lookback: options.resumeLookback,
+      },
+    };
+  }
+
+  const checkpointNextIndex = clampNumber(
+    previous.next_index ?? previous.processed ?? 0,
+    0,
+    profiles.length
+  );
+  const windowStart = Math.max(0, checkpointNextIndex - options.resumeLookback);
+  let startIndex = checkpointNextIndex;
+
+  for (let index = windowStart; index < checkpointNextIndex; index += 1) {
+    const profileFile = getProfileFilePath(profilesRoot, profiles[index].profile_id);
+    if (!(await fileExistsWithContent(profileFile))) {
+      startIndex = index;
+      break;
+    }
+  }
+
+  return {
+    enabled: true,
+    startIndex,
+    previous,
+    summary: {
+      enabled: true,
+      reason: "checkpoint_found",
+      start_index: startIndex,
+      checkpoint_next_index: checkpointNextIndex,
+      lookback: options.resumeLookback,
+      previous_status: status,
+    },
+  };
+}
+
+async function createVpnController(options) {
+  if (!options.mullvadRotateOnRateLimit) {
+    return null;
+  }
+
+  const summary = {
+    enabled: true,
+    command: options.mullvadCommand,
+    reconnect_attempts: options.mullvadReconnectAttempts,
+    reconnect_timeout_ms: options.mullvadReconnectTimeoutMs,
+    settle_ms: options.mullvadSettleMs,
+    rotations_started: 0,
+    rotations_completed: 0,
+    rotations_failed: 0,
+    current_relay: null,
+    current_ip: null,
+    last_before: null,
+    last_after: null,
+    last_reason: null,
+    last_error: null,
+    last_rotated_at: null,
+  };
+
+  await runCommand(options.mullvadCommand, ["version"], options.mullvadReconnectTimeoutMs);
+  const currentStatus = await getMullvadStatus(options).catch(() => null);
+  if (currentStatus) {
+    summary.current_relay = currentStatus.relay;
+    summary.current_ip = currentStatus.ipv4;
+  }
+
+  let rotationPromise = null;
+
+  return {
+    async waitForReady() {
+      if (rotationPromise) {
+        await rotationPromise;
+      }
+    },
+
+    async rotate(context) {
+      if (rotationPromise) {
+        return rotationPromise;
+      }
+
+      rotationPromise = (async () => {
+        summary.rotations_started += 1;
+        summary.last_reason = context || null;
+        summary.last_error = null;
+
+        const before = await getMullvadStatus(options).catch(() => null);
+        summary.last_before = before;
+
+        let finalStatus = before;
+        for (let attempt = 1; attempt <= options.mullvadReconnectAttempts; attempt += 1) {
+          await runCommand(
+            options.mullvadCommand,
+            ["reconnect", "--wait"],
+            options.mullvadReconnectTimeoutMs
+          );
+
+          if (options.mullvadSettleMs > 0) {
+            await sleep(options.mullvadSettleMs);
+          }
+
+          finalStatus = await getMullvadStatus(options);
+          if (isMullvadStatusDifferent(before, finalStatus)) {
+            summary.rotations_completed += 1;
+            summary.current_relay = finalStatus.relay;
+            summary.current_ip = finalStatus.ipv4;
+            summary.last_after = finalStatus;
+            summary.last_rotated_at = new Date().toISOString();
+            return finalStatus;
+          }
+        }
+
+        summary.rotations_failed += 1;
+        summary.last_after = finalStatus;
+        throw new Error(
+          `Mullvad reconnect did not produce a new IP/relay after ${options.mullvadReconnectAttempts} attempts.`
+        );
+      })()
+        .catch((error) => {
+          summary.last_error = error?.message || String(error);
+          throw error;
+        })
+        .finally(() => {
+          rotationPromise = null;
+        });
+
+      return rotationPromise;
+    },
+
+    getSummary() {
+      return {
+        ...summary,
+        rotating: Boolean(rotationPromise),
+      };
+    },
+  };
+}
+
+function createRateController(options, vpnController) {
   const state = {
     enabled: true,
     minRequestGapMs: options.minRequestGapMs,
@@ -901,6 +1256,22 @@ function createRateController(options) {
           const waitMs = Math.max(0, state.pauseUntil - now, state.nextRequestAt - now);
 
           if (waitMs <= 0) {
+            if (vpnController) {
+              await vpnController.waitForReady();
+            }
+
+            const postVpnNow = Date.now();
+            const postVpnWaitMs = Math.max(
+              0,
+              state.pauseUntil - postVpnNow,
+              state.nextRequestAt - postVpnNow
+            );
+            if (postVpnWaitMs > 0) {
+              state.totalWaitMs += postVpnWaitMs;
+              await sleep(postVpnWaitMs);
+              continue;
+            }
+
             const grantedAt = Date.now();
             state.nextRequestAt = grantedAt + state.currentRequestGapMs;
             state.totalReservations += 1;
@@ -980,6 +1351,31 @@ function createRateController(options) {
         current_request_gap_ms: state.currentRequestGapMs,
         retry_after_ms: error?.retryAfterMs ?? null,
       };
+    },
+
+    async handleRateLimit(error, meta) {
+      this.noteRateLimit(error);
+
+      if (!vpnController) {
+        return;
+      }
+
+      try {
+        await vpnController.rotate({
+          reason: "rate_limit",
+          status: error?.status ?? null,
+          retry_after_ms: error?.retryAfterMs ?? null,
+          profile_id: meta?.profileId ?? null,
+          attempt: meta?.attempt ?? null,
+        });
+      } catch (rotationError) {
+        state.lastEvent = {
+          type: "vpn_rotation_failed",
+          at: new Date().toISOString(),
+          message: rotationError?.message || String(rotationError),
+          current_request_gap_ms: state.currentRequestGapMs,
+        };
+      }
     },
 
     noteTransientFailure(error) {
@@ -1097,7 +1493,7 @@ async function fetchProfileWithRetries(params) {
       lastError = error;
 
       if (isRateLimitError(error)) {
-        rateController.noteRateLimit(error);
+        await rateController.handleRateLimit(error, { profileId, attempt });
       } else if (isRetriableError(error)) {
         rateController.noteTransientFailure(error);
       }
@@ -1420,6 +1816,86 @@ function csvEscape(value) {
   return text;
 }
 
+async function readJsonIfExists(filePath) {
+  try {
+    return JSON.parse(await fsp.readFile(filePath, "utf8"));
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function clampNumber(value, min, max) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return min;
+  }
+  return Math.max(min, Math.min(max, Math.floor(parsed)));
+}
+
+async function runCommand(command, args, timeoutMs) {
+  try {
+    return await execFileAsync(command, args, {
+      timeout: timeoutMs,
+      windowsHide: true,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  } catch (error) {
+    const stdout = error?.stdout ? String(error.stdout).trim() : "";
+    const stderr = error?.stderr ? String(error.stderr).trim() : "";
+    const detail = [stdout, stderr].filter(Boolean).join(" | ");
+    throw new Error(
+      `Command failed: ${command} ${args.join(" ")}${detail ? ` -> ${detail}` : ""}`
+    );
+  }
+}
+
+async function getMullvadStatus(options) {
+  const { stdout } = await runCommand(
+    options.mullvadCommand,
+    ["status"],
+    options.mullvadReconnectTimeoutMs
+  );
+  return parseMullvadStatus(stdout);
+}
+
+function parseMullvadStatus(text) {
+  const raw = String(text || "").trim();
+  const relay = raw.match(/Relay:\s+(.+)$/m)?.[1]?.trim() || null;
+  const ipv4 = raw.match(/IPv4:\s+([0-9.]+)/m)?.[1]?.trim() || null;
+  const state = raw.split(/\r?\n/, 1)[0]?.trim() || null;
+
+  return {
+    raw,
+    state,
+    connected: /^Connected$/i.test(state || ""),
+    relay,
+    ipv4,
+  };
+}
+
+function isMullvadStatusDifferent(before, after) {
+  if (!after || !after.connected) {
+    return false;
+  }
+
+  if (!before) {
+    return true;
+  }
+
+  if (before.ipv4 && after.ipv4 && before.ipv4 !== after.ipv4) {
+    return true;
+  }
+
+  if (before.relay && after.relay && before.relay !== after.relay) {
+    return true;
+  }
+
+  return before.raw !== after.raw;
+}
+
 function trimPreview(value, maxLength = 300) {
   const text = cleanInlineText(value);
   return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...`;
@@ -1455,6 +1931,13 @@ function sanitizeOptionsForManifest(options) {
     rate_limit_cooldown_ms: options.rateLimitCooldownMs,
     max_rate_limit_cooldown_ms: options.maxRateLimitCooldownMs,
     transient_error_cooldown_ms: options.transientErrorCooldownMs,
+    resume: options.resume,
+    resume_lookback: options.resumeLookback,
+    mullvad_rotate_on_rate_limit: options.mullvadRotateOnRateLimit,
+    mullvad_command: options.mullvadCommand,
+    mullvad_reconnect_attempts: options.mullvadReconnectAttempts,
+    mullvad_reconnect_timeout_ms: options.mullvadReconnectTimeoutMs,
+    mullvad_settle_ms: options.mullvadSettleMs,
     mongo_enabled: options.mongoEnabled,
     mongo_uri: redactMongoUri(options.mongoUri),
     mongo_db: options.mongoDb,

@@ -1,0 +1,33 @@
+{
+  "started_at": "2026-04-01T19:14:15.390Z",
+  "completed_at": "2026-04-01T19:26:08.803Z",
+  "status": "completed",
+  "total": 2,
+  "downloaded": 2,
+  "skipped_existing": 0,
+  "failed": 0,
+  "processed": 2,
+  "stopped_early": false,
+  "mongo": null,
+  "throttle": {
+    "enabled": true,
+    "min_request_gap_ms": 900,
+    "current_request_gap_ms": 2700,
+    "max_request_gap_ms": 20000,
+    "rate_limit_cooldown_ms": 240000,
+    "max_rate_limit_cooldown_ms": 900000,
+    "transient_error_cooldown_ms": 10000,
+    "pause_remaining_ms": 0,
+    "next_request_in_ms": 2230,
+    "total_reservations": 4,
+    "total_wait_ms": 592521,
+    "rate_limit_hits": 2,
+    "transient_failure_hits": 0,
+    "consecutive_rate_limits": 0,
+    "last_event": {
+      "type": "reserve",
+      "at": "2026-04-01T19:26:08.333Z",
+      "label": "profile:2128950:attempt:2"
+    }
+  }
+}

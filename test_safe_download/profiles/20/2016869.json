@@ -1,0 +1,1065 @@
+{
+  "profile_id": "2016869",
+  "profile_page_url": "https://app.usebraintrust.com/talent/2016869/",
+  "profile_api_url": "https://app.usebraintrust.com/api/freelancers/2016869/",
+  "fetched_at": "2026-04-01T19:26:07.642Z",
+  "http": {
+    "status": 200,
+    "attempts": 2,
+    "duration_ms": 591005,
+    "etag": null,
+    "last_modified": null,
+    "content_type": "application/json"
+  },
+  "sources": [
+    {
+      "row_number": 2,
+      "state": "Alabama",
+      "user_id": "2031652",
+      "first_name": "Jordan",
+      "last_name": "Hart",
+      "profile_url": "/talent/2016869/",
+      "profile_id": "2016869",
+      "profile_page_url": "https://app.usebraintrust.com/talent/2016869/",
+      "profile_api_url": "https://app.usebraintrust.com/api/freelancers/2016869/"
+    }
+  ],
+  "profile": {
+    "id": 2016869,
+    "user": {
+      "id": 2031652,
+      "first_name": "Jordan",
+      "first_name_possessive": "Jordan’s",
+      "public_name_possessive": "Jordan Hart’s",
+      "last_name": "Hart",
+      "gravatar": "https://secure.gravatar.com/avatar/fc466887d246241b2c643137115ef1b7.jpg?s=150&d=404&r=g",
+      "title": "Engineering",
+      "user_languages": [],
+      "timezone": "America/Chicago",
+      "introduction": null,
+      "introduction_headline": null,
+      "address": {
+        "id": 1324610,
+        "city": "Birmingham",
+        "country": "US",
+        "state": "AL",
+        "country_name": "United States of America"
+      },
+      "public_name": "Jordan Hart",
+      "profile_url": "/talent/2016869/",
+      "created": "2025-12-27T23:56:58.856131Z",
+      "can_be_messaged": false,
+      "account_mode": "get_a_job",
+      "has_visited_career_help": true,
+      "has_started_creating_post": false,
+      "has_avatar_set": false,
+      "avatar": null,
+      "avatar_thumbnail": null
+    },
+    "total_jobs": 0,
+    "average_work_quality": null,
+    "average_responsiveness": null,
+    "average_rating": null,
+    "review_count": 0,
+    "stars_breakdown": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0
+    },
+    "approved": true,
+    "account": 2024787,
+    "role": {
+      "id": 5,
+      "name": "Engineering",
+      "is_default": true,
+      "order": 0,
+      "name_plural": "Engineers",
+      "is_featured": true,
+      "color": "green"
+    },
+    "location": "Birmingham, AL, USA",
+    "created_via_byot": false,
+    "availability_for_work": true,
+    "availability_for_work_options": [
+      "full_time",
+      "part_time",
+      "direct_hire"
+    ],
+    "working_hours_start": 7,
+    "working_hours_end": 23,
+    "working_hours_tz_abbr": "CST/CDT",
+    "working_hours_utc_offset": "-6.00",
+    "can_bid": true,
+    "can_user_review_job": false,
+    "can_user_review_help_offer": false,
+    "profile_visits_count": null,
+    "accent_color": "--soft-blue",
+    "experience_level": null,
+    "spaces": [],
+    "cover_photo": null,
+    "cover_photo_id": null,
+    "freelancer_certificates": [],
+    "freelancer_schools": [
+      {
+        "id": 445183,
+        "school": {
+          "id": 613,
+          "name": "Purdue University",
+          "is_default": false,
+          "order": null
+        },
+        "degree": {
+          "id": 51594,
+          "name": "Bachelor's degree Mechanical Engineering Technology",
+          "is_default": false,
+          "order": null
+        },
+        "graduation_date": "2016-01-01"
+      }
+    ],
+    "freelancer_skills": [
+      {
+        "id": 12350581,
+        "skill": {
+          "id": 7308,
+          "name": "Mechanical Engineering",
+          "is_default": true,
+          "order": 717
+        },
+        "order": 0,
+        "is_superpower": true
+      },
+      {
+        "id": 12350582,
+        "skill": {
+          "id": 11677,
+          "name": "Manufacturing Engineering",
+          "is_default": true,
+          "order": 4725
+        },
+        "order": 1,
+        "is_superpower": true
+      },
+      {
+        "id": 12350583,
+        "skill": {
+          "id": 5192,
+          "name": "Written Communication",
+          "is_default": true,
+          "order": 658
+        },
+        "order": 2,
+        "is_superpower": true
+      },
+      {
+        "id": 12350584,
+        "skill": {
+          "id": 247,
+          "name": "Project Management",
+          "is_default": true,
+          "order": 41
+        },
+        "order": 3,
+        "is_superpower": true
+      },
+      {
+        "id": 12350588,
+        "skill": {
+          "id": 3817,
+          "name": "3D CAD",
+          "is_default": true,
+          "order": 2807
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350609,
+        "skill": {
+          "id": 11344,
+          "name": "Active Listening",
+          "is_default": true,
+          "order": 4305
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350610,
+        "skill": {
+          "id": 1152,
+          "name": "Assembly",
+          "is_default": true,
+          "order": 506
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350611,
+        "skill": {
+          "id": 3011,
+          "name": "Attention To Detail",
+          "is_default": true,
+          "order": 4321
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350613,
+        "skill": {
+          "id": 11358,
+          "name": "Audit Preparation",
+          "is_default": true,
+          "order": 4324
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350612,
+        "skill": {
+          "id": 6065,
+          "name": "Audits",
+          "is_default": true,
+          "order": 385
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350589,
+        "skill": {
+          "id": 785,
+          "name": "AutoCAD",
+          "is_default": true,
+          "order": 720
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350614,
+        "skill": {
+          "id": 8011,
+          "name": "Autodesk",
+          "is_default": true,
+          "order": 1055
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350595,
+        "skill": {
+          "id": 1197,
+          "name": "Automation",
+          "is_default": true,
+          "order": 85
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350594,
+        "skill": {
+          "id": 6223,
+          "name": "Automotive OEM",
+          "is_default": true,
+          "order": 3456
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350615,
+        "skill": {
+          "id": 455,
+          "name": "Budgeting",
+          "is_default": true,
+          "order": 389
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350616,
+        "skill": {
+          "id": 246,
+          "name": "Budget Management",
+          "is_default": true,
+          "order": 721
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350617,
+        "skill": {
+          "id": 11367,
+          "name": "Budget Preparation",
+          "is_default": true,
+          "order": 4335
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350590,
+        "skill": {
+          "id": 2288,
+          "name": "CAD",
+          "is_default": true,
+          "order": 852
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350602,
+        "skill": {
+          "id": 8465,
+          "name": "CNC",
+          "is_default": true,
+          "order": 1920
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350619,
+        "skill": {
+          "id": 7876,
+          "name": "Conflict Resolution",
+          "is_default": true,
+          "order": 699
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350620,
+        "skill": {
+          "id": 11281,
+          "name": "Continuous Improvement",
+          "is_default": true,
+          "order": 4383
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350621,
+        "skill": {
+          "id": 7516,
+          "name": "Cost Analysis",
+          "is_default": true,
+          "order": 4390
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350622,
+        "skill": {
+          "id": 2569,
+          "name": "Cost Savings",
+          "is_default": true,
+          "order": 605
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350623,
+        "skill": {
+          "id": 5014,
+          "name": "Cross Functional Team Collaboration",
+          "is_default": true,
+          "order": 2053
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350624,
+        "skill": {
+          "id": 9855,
+          "name": "Cross-functional Team Management",
+          "is_default": true,
+          "order": 4712
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350625,
+        "skill": {
+          "id": 3006,
+          "name": "Decision Making",
+          "is_default": true,
+          "order": 128
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350626,
+        "skill": {
+          "id": 11270,
+          "name": "Documentation",
+          "is_default": true,
+          "order": 4416
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350627,
+        "skill": {
+          "id": 442,
+          "name": "Document Design",
+          "is_default": true,
+          "order": 2690
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350628,
+        "skill": {
+          "id": 9580,
+          "name": "Efficiency",
+          "is_default": true,
+          "order": 66
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350629,
+        "skill": {
+          "id": 11435,
+          "name": "Electrical Experience",
+          "is_default": true,
+          "order": 4425
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350630,
+        "skill": {
+          "id": 3818,
+          "name": "Engineering",
+          "is_default": true,
+          "order": 14
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350599,
+        "skill": {
+          "id": 790,
+          "name": "Engineering Leadership",
+          "is_default": true,
+          "order": 2150
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350631,
+        "skill": {
+          "id": 818,
+          "name": "English",
+          "is_default": true,
+          "order": 15
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350632,
+        "skill": {
+          "id": 6777,
+          "name": "Entrepreneurship",
+          "is_default": true,
+          "order": 484
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350633,
+        "skill": {
+          "id": 9594,
+          "name": "Epicor",
+          "is_default": true,
+          "order": 2794
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350634,
+        "skill": {
+          "id": 11472,
+          "name": "Forklift",
+          "is_default": true,
+          "order": 4468
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350635,
+        "skill": {
+          "id": 11476,
+          "name": "GD&T",
+          "is_default": true,
+          "order": 4474
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350636,
+        "skill": {
+          "id": 3320,
+          "name": "Goal Setting",
+          "is_default": true,
+          "order": 1517
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350637,
+        "skill": {
+          "id": 11486,
+          "name": "Hardware Installation",
+          "is_default": true,
+          "order": 4485
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350605,
+        "skill": {
+          "id": 3424,
+          "name": "Layout Design",
+          "is_default": true,
+          "order": 1175
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350639,
+        "skill": {
+          "id": 902,
+          "name": "Lean",
+          "is_default": true,
+          "order": 379
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350587,
+        "skill": {
+          "id": 8250,
+          "name": "Lean Principles",
+          "is_default": true,
+          "order": 2673
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350585,
+        "skill": {
+          "id": 783,
+          "name": "Lean Six Sigma",
+          "is_default": true,
+          "order": 909
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350638,
+        "skill": {
+          "id": 7018,
+          "name": "Lean Thinking",
+          "is_default": true,
+          "order": 3189
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350640,
+        "skill": {
+          "id": 7543,
+          "name": "Lucidchart",
+          "is_default": true,
+          "order": 1560
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350641,
+        "skill": {
+          "id": 2207,
+          "name": "Manage Cross Functional Teams",
+          "is_default": true,
+          "order": 2928
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350586,
+        "skill": {
+          "id": 3904,
+          "name": "Manufacturing",
+          "is_default": true,
+          "order": 347
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350601,
+        "skill": {
+          "id": 8701,
+          "name": "Mechanical Design",
+          "is_default": true,
+          "order": 2405
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350604,
+        "skill": {
+          "id": 6128,
+          "name": "Microsoft Office Programs",
+          "is_default": true,
+          "order": 2729
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350642,
+        "skill": {
+          "id": 7787,
+          "name": "Multitasking",
+          "is_default": true,
+          "order": 701
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350597,
+        "skill": {
+          "id": 6818,
+          "name": "New Product Introduction",
+          "is_default": true,
+          "order": 2533
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350603,
+        "skill": {
+          "id": 6089,
+          "name": "PLC Programming",
+          "is_default": true,
+          "order": 2843
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350643,
+        "skill": {
+          "id": 1309,
+          "name": "Presentations",
+          "is_default": true,
+          "order": 139
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350644,
+        "skill": {
+          "id": 11276,
+          "name": "Presentation Skills",
+          "is_default": true,
+          "order": 4580
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350607,
+        "skill": {
+          "id": 2801,
+          "name": "Problem Solving",
+          "is_default": true,
+          "order": 64
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350646,
+        "skill": {
+          "id": 4115,
+          "name": "Process Development",
+          "is_default": true,
+          "order": 1369
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350645,
+        "skill": {
+          "id": 7660,
+          "name": "Process Improvements",
+          "is_default": true,
+          "order": 563
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350650,
+        "skill": {
+          "id": 2323,
+          "name": "Process Mapping",
+          "is_default": true,
+          "order": 1210
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350596,
+        "skill": {
+          "id": 3902,
+          "name": "Production Management",
+          "is_default": true,
+          "order": 1489
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350598,
+        "skill": {
+          "id": 1585,
+          "name": "Product Launch",
+          "is_default": true,
+          "order": 671
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350618,
+        "skill": {
+          "id": 2980,
+          "name": "Project Budgeting",
+          "is_default": true,
+          "order": 2641
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350648,
+        "skill": {
+          "id": 1685,
+          "name": "Project Manager",
+          "is_default": true,
+          "order": 132
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350649,
+        "skill": {
+          "id": 1934,
+          "name": "Project Planning",
+          "is_default": true,
+          "order": 493
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350647,
+        "skill": {
+          "id": 3420,
+          "name": "Project Scheduling",
+          "is_default": true,
+          "order": 2075
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350651,
+        "skill": {
+          "id": 6648,
+          "name": "QA Process Improvements",
+          "is_default": true,
+          "order": 3705
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350606,
+        "skill": {
+          "id": 11268,
+          "name": "Quality Assurance",
+          "is_default": true,
+          "order": 4591
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350592,
+        "skill": {
+          "id": 9533,
+          "name": "Robotic Process Automation",
+          "is_default": true,
+          "order": 1671
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350593,
+        "skill": {
+          "id": 948,
+          "name": "Robotics",
+          "is_default": true,
+          "order": 655
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350608,
+        "skill": {
+          "id": 5756,
+          "name": "Root Cause Analysis",
+          "is_default": true,
+          "order": 654
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350591,
+        "skill": {
+          "id": 784,
+          "name": "SolidWorks",
+          "is_default": true,
+          "order": 1192
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350600,
+        "skill": {
+          "id": 5543,
+          "name": "Systems Engineering",
+          "is_default": true,
+          "order": 844
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350652,
+        "skill": {
+          "id": 2729,
+          "name": "Troubleshooting",
+          "is_default": true,
+          "order": 160
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350653,
+        "skill": {
+          "id": 11665,
+          "name": "Warehouse Experience",
+          "is_default": true,
+          "order": 4695
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12350654,
+        "skill": {
+          "id": 11310,
+          "name": "Writing Skills",
+          "is_default": true,
+          "order": 4702
+        },
+        "order": null,
+        "is_superpower": false
+      }
+    ],
+    "external_profiles": [
+      {
+        "id": 1666767,
+        "site": {
+          "id": 11,
+          "name": "LinkedIn",
+          "logo": {
+            "id": 1180,
+            "thumbnail": "https://d1m1s6un1a8qgj.cloudfront.net/media/external_site_image/i_lATSWLS.svg"
+          },
+          "placeholder": "linkedin.com/in/yourusername"
+        },
+        "public_url": "http://linkedin.com/in/jordan-p-hart"
+      }
+    ],
+    "roles": [
+      {
+        "id": 1598349,
+        "role": {
+          "id": 5,
+          "name": "Engineering",
+          "is_default": true,
+          "order": 0,
+          "name_plural": "Engineers",
+          "is_featured": true,
+          "color": "green"
+        },
+        "primary": true,
+        "years_experience": 8,
+        "experience_as_arrow": 3
+      }
+    ],
+    "portfolio_items": [],
+    "freelancer_work_experience": [
+      {
+        "id": 1730174,
+        "company": {
+          "id": 63756,
+          "name": "Magna International",
+          "is_default": false,
+          "order": null
+        },
+        "title": "Senior Manufacturing Engineer",
+        "year_from": 2022,
+        "month_from": 8,
+        "year_to": null,
+        "month_to": null,
+        "description": "- Production of high pressure die cast aluminum structural parts \n- Cost savings of $350K annually through process improvements \n- Machine system design and integration \n- Ergonomics Coordinator \n- Management of engineering and production KPI’s for assembly lines  \n- Created and implemented all production and assembly maintenance standard \nwork documentation\n- Continuous improvement projects ranging from self-directed to lead of cross \nfunctional teams"
+      },
+      {
+        "id": 1732259,
+        "company": {
+          "id": 659198,
+          "name": "Mercor Intelligence",
+          "is_default": false,
+          "order": null
+        },
+        "title": "AI Trainer",
+        "year_from": 2025,
+        "month_from": 6,
+        "year_to": 2025,
+        "month_to": 12,
+        "description": "Senior Domain Expert Project \n  - Generation and improvement of request prompts and deliverables\n  - Review and provide feedback on prompts and deliverables created by peers\n  - Grading and feedback on LLM outputs\nRubric Project \n  - Prompt and rubric creation in relation to engineering math problems"
+      },
+      {
+        "id": 1732240,
+        "company": {
+          "id": 63756,
+          "name": "Magna International",
+          "is_default": false,
+          "order": null
+        },
+        "title": "Assembly SME",
+        "year_from": 2022,
+        "month_from": 1,
+        "year_to": 2022,
+        "month_to": 8,
+        "description": "- Assembly expert for the new product team, assisting in the creation of RFQs \n- Assembly process design and production line development \n- Manufacturing policy creation and implementation \n- Management of process requirements and KPI’s \n- Capital equipment quotation and budget creation for NPD projects"
+      },
+      {
+        "id": 1732244,
+        "company": {
+          "id": 63756,
+          "name": "Magna International",
+          "is_default": false,
+          "order": null
+        },
+        "title": "Manufacturing Engineer",
+        "year_from": 2021,
+        "month_from": 1,
+        "year_to": 2021,
+        "month_to": 12,
+        "description": "- Implemented solutions to quality and equipment issues\n- Ergonomics Coordinator \n- Created and implemented production and assembly maintenance standard work documentation \n- Continuous improvement projects ranging from self-directed to lead of cross \nfunctional teams"
+      },
+      {
+        "id": 1732247,
+        "company": {
+          "id": 413271,
+          "name": "Aisin Canada",
+          "is_default": false,
+          "order": null
+        },
+        "title": "Manufacturing Engineer",
+        "year_from": 2019,
+        "month_from": 7,
+        "year_to": 2020,
+        "month_to": 9,
+        "description": "- Project management of two new product launches \n- Machine safety and scrap improvement projects \n- Implement solutions to quality and equipment issues"
+      },
+      {
+        "id": 1732251,
+        "company": {
+          "id": 413271,
+          "name": "Aisin Canada",
+          "is_default": false,
+          "order": null
+        },
+        "title": "Process Engineer",
+        "year_from": 2017,
+        "month_from": 7,
+        "year_to": 2019,
+        "month_to": 7,
+        "description": "- CNC machining and assembly of cast iron and aluminum transmission and \nsuspension parts \n- Project management of two new product launches\n- Support implementation of two new product launches\n- Standard document creation"
+      }
+    ],
+    "experience_as_arrow": 3
+  }
+}

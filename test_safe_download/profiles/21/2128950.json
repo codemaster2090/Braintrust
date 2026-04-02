@@ -1,0 +1,306 @@
+{
+  "profile_id": "2128950",
+  "profile_page_url": "https://app.usebraintrust.com/talent/2128950/",
+  "profile_api_url": "https://app.usebraintrust.com/api/freelancers/2128950/",
+  "fetched_at": "2026-04-01T19:26:08.782Z",
+  "http": {
+    "status": 200,
+    "attempts": 2,
+    "duration_ms": 591550,
+    "etag": null,
+    "last_modified": null,
+    "content_type": "application/json"
+  },
+  "sources": [
+    {
+      "row_number": 3,
+      "state": "Alabama",
+      "user_id": "2144008",
+      "first_name": "Nathan",
+      "last_name": "Claus",
+      "profile_url": "/talent/2128950/",
+      "profile_id": "2128950",
+      "profile_page_url": "https://app.usebraintrust.com/talent/2128950/",
+      "profile_api_url": "https://app.usebraintrust.com/api/freelancers/2128950/"
+    }
+  ],
+  "profile": {
+    "id": 2128950,
+    "user": {
+      "id": 2144008,
+      "first_name": "Nathan",
+      "first_name_possessive": "Nathan’s",
+      "public_name_possessive": "Nathan Claus’",
+      "last_name": "Claus",
+      "gravatar": "https://secure.gravatar.com/avatar/8675b84fcfed6b982bea35ee19a0c0f6.jpg?s=150&d=404&r=g",
+      "title": "Engineering",
+      "user_languages": [],
+      "timezone": "America/Chicago",
+      "introduction": "Hello,\nAs a current Senior Tech Lead at Anduril and former Software Engineering Manager for Boeing’s Space Launch System, I specialize in the design, development, test and evaluation lifecycle of mathematical algorithms (such as vehicle simulations, sensor models and sensor fusion algorithms) in C++, MATLAB and Python. My goal is to deliver rigorous, bug-free, time and memory optimized code that can be used without errors for decades.\n\nI hold a B.S. in Applied Mathematics and captained Purdue’s 2009 ACM-ICPC World Finals programming team.",
+      "introduction_headline": "Senior Software Technical Lead at Anduril",
+      "address": {
+        "id": 1374157,
+        "city": "Huntsville",
+        "country": "US",
+        "state": "AL",
+        "country_name": "United States of America"
+      },
+      "public_name": "Nathan Claus",
+      "profile_url": "/talent/2128950/",
+      "created": "2026-02-25T21:40:37.097874Z",
+      "can_be_messaged": false,
+      "account_mode": "get_a_job",
+      "has_visited_career_help": true,
+      "has_started_creating_post": false,
+      "has_avatar_set": false,
+      "avatar": null,
+      "avatar_thumbnail": null
+    },
+    "total_jobs": 0,
+    "average_work_quality": null,
+    "average_responsiveness": null,
+    "average_rating": null,
+    "review_count": 0,
+    "stars_breakdown": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0
+    },
+    "approved": true,
+    "account": 2136920,
+    "role": {
+      "id": 5,
+      "name": "Engineering",
+      "is_default": true,
+      "order": 0,
+      "name_plural": "Engineers",
+      "is_featured": true,
+      "color": "green"
+    },
+    "location": "Huntsville, AL, USA",
+    "created_via_byot": false,
+    "availability_for_work": false,
+    "availability_for_work_options": [],
+    "working_hours_start": 9,
+    "working_hours_end": 17,
+    "working_hours_tz_abbr": "CST/CDT",
+    "working_hours_utc_offset": "-6.00",
+    "can_bid": true,
+    "can_user_review_job": false,
+    "can_user_review_help_offer": false,
+    "profile_visits_count": null,
+    "accent_color": "--soft-blue",
+    "experience_level": null,
+    "spaces": [],
+    "cover_photo": null,
+    "cover_photo_id": null,
+    "freelancer_certificates": [],
+    "freelancer_schools": [],
+    "freelancer_skills": [
+      {
+        "id": 12738741,
+        "skill": {
+          "id": 311,
+          "name": "C++",
+          "is_default": true,
+          "order": 4340
+        },
+        "order": 0,
+        "is_superpower": true
+      },
+      {
+        "id": 12738742,
+        "skill": {
+          "id": 11715,
+          "name": "Applied Mathematics",
+          "is_default": true,
+          "order": 4752
+        },
+        "order": 1,
+        "is_superpower": true
+      },
+      {
+        "id": 12738743,
+        "skill": {
+          "id": 1058,
+          "name": "Sensors",
+          "is_default": true,
+          "order": 856
+        },
+        "order": 2,
+        "is_superpower": true
+      },
+      {
+        "id": 12738750,
+        "skill": {
+          "id": 5138,
+          "name": "Embedded Programming",
+          "is_default": true,
+          "order": 3059
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12738747,
+        "skill": {
+          "id": 283,
+          "name": "Git",
+          "is_default": true,
+          "order": 57
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12738745,
+        "skill": {
+          "id": 1374,
+          "name": "Matlab",
+          "is_default": true,
+          "order": 438
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12738744,
+        "skill": {
+          "id": 312,
+          "name": "Python",
+          "is_default": true,
+          "order": 19
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12738748,
+        "skill": {
+          "id": 1805,
+          "name": "React",
+          "is_default": true,
+          "order": 69
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12738749,
+        "skill": {
+          "id": 7591,
+          "name": "Sensor Fusion",
+          "is_default": true,
+          "order": 2840
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12738746,
+        "skill": {
+          "id": 293,
+          "name": "SQL",
+          "is_default": true,
+          "order": 18
+        },
+        "order": null,
+        "is_superpower": false
+      },
+      {
+        "id": 12738751,
+        "skill": {
+          "id": 5543,
+          "name": "Systems Engineering",
+          "is_default": true,
+          "order": 844
+        },
+        "order": null,
+        "is_superpower": false
+      }
+    ],
+    "external_profiles": [
+      {
+        "id": 1779450,
+        "site": {
+          "id": 11,
+          "name": "LinkedIn",
+          "logo": {
+            "id": 1180,
+            "thumbnail": "https://d1m1s6un1a8qgj.cloudfront.net/media/external_site_image/i_lATSWLS.svg"
+          },
+          "placeholder": "linkedin.com/in/yourusername"
+        },
+        "public_url": "https://www.linkedin.com/in/nathan-claus-91336912a/"
+      }
+    ],
+    "roles": [
+      {
+        "id": 1673486,
+        "role": {
+          "id": 5,
+          "name": "Engineering",
+          "is_default": true,
+          "order": 0,
+          "name_plural": "Engineers",
+          "is_featured": true,
+          "color": "green"
+        },
+        "primary": true,
+        "years_experience": 15,
+        "experience_as_arrow": 4
+      },
+      {
+        "id": 1673487,
+        "role": {
+          "id": 14,
+          "name": "Project & Program Management",
+          "is_default": true,
+          "order": 11,
+          "name_plural": "Project And Program Managers",
+          "is_featured": true,
+          "color": "teal"
+        },
+        "primary": false,
+        "years_experience": 7,
+        "experience_as_arrow": 3
+      }
+    ],
+    "portfolio_items": [],
+    "freelancer_work_experience": [
+      {
+        "id": 1796515,
+        "company": {
+          "id": 512903,
+          "name": "Anduril Industries",
+          "is_default": false,
+          "order": null
+        },
+        "title": "Senior Software Tech Lead",
+        "year_from": 2025,
+        "month_from": 6,
+        "year_to": null,
+        "month_to": null,
+        "description": "Responsible for design,  development and verification of the algorithms used by the sensor and mover models to simulate various aerospace and defense vehicles and platforms (air, land, sea and subsurface)"
+      },
+      {
+        "id": 1796516,
+        "company": {
+          "id": 14038,
+          "name": "Boeing",
+          "is_default": false,
+          "order": null
+        },
+        "title": "Software Engineering Manager",
+        "year_from": 2020,
+        "month_from": 12,
+        "year_to": 2025,
+        "month_to": 6,
+        "description": "Led the team responsible for developing, testing and integrating the Exploratory Upper Stage Space Vehicle Integrated Simulation as part of the Space Launch System program."
+      }
+    ],
+    "experience_as_arrow": 4
+  }
+}

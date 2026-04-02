@@ -1,0 +1,83 @@
+{
+  "started_at": "2026-04-01T19:14:15.390Z",
+  "input_csv": "D:\\Work\\braintrust\\braintrust_developers_2026-04-01T17-58-21-624Z_filtered.csv",
+  "output_dir": "D:\\Work\\braintrust\\test_safe_download",
+  "files": {
+    "profiles_root": "D:\\Work\\braintrust\\test_safe_download\\profiles",
+    "errors_ndjson": "D:\\Work\\braintrust\\test_safe_download\\errors.ndjson",
+    "progress_json": "D:\\Work\\braintrust\\test_safe_download\\progress.json",
+    "manifest_json": "D:\\Work\\braintrust\\test_safe_download\\manifest.json",
+    "details_ndjson": "D:\\Work\\braintrust\\test_safe_download\\profiles.ndjson",
+    "flat_csv": "D:\\Work\\braintrust\\test_safe_download\\profiles_flat.csv"
+  },
+  "options": {
+    "input": ".\\braintrust_developers_2026-04-01T17-58-21-624Z_filtered.csv",
+    "out": ".\\test_safe_download",
+    "concurrency": 2,
+    "timeout_ms": 30000,
+    "retries": 5,
+    "retry_base_ms": 1000,
+    "log_every": 1,
+    "max_errors": 1000,
+    "min_request_gap_ms": 900,
+    "max_request_gap_ms": 20000,
+    "rate_limit_cooldown_ms": 60000,
+    "max_rate_limit_cooldown_ms": 900000,
+    "transient_error_cooldown_ms": 10000,
+    "mongo_enabled": false,
+    "mongo_uri": "mongodb://localhost:27017/",
+    "mongo_db": "braintrust",
+    "mongo_collection": "profiles",
+    "mongo_timeout_ms": 10000,
+    "offset": 0,
+    "limit": 2,
+    "force": false,
+    "summary_only": false,
+    "cookie_supplied": false
+  },
+  "source_rows": 38896,
+  "invalid_rows": 0,
+  "unique_profiles_total": 38895,
+  "selected_profiles": 2,
+  "duplicate_profile_rows": 1,
+  "mongo": {
+    "enabled": false
+  },
+  "throttle": {
+    "enabled": true,
+    "min_request_gap_ms": 900,
+    "current_request_gap_ms": 2700,
+    "max_request_gap_ms": 20000,
+    "rate_limit_cooldown_ms": 240000,
+    "max_rate_limit_cooldown_ms": 900000,
+    "transient_error_cooldown_ms": 10000,
+    "pause_remaining_ms": 0,
+    "next_request_in_ms": 2230,
+    "total_reservations": 4,
+    "total_wait_ms": 592521,
+    "rate_limit_hits": 2,
+    "transient_failure_hits": 0,
+    "consecutive_rate_limits": 0,
+    "last_event": {
+      "type": "reserve",
+      "at": "2026-04-01T19:26:08.333Z",
+      "label": "profile:2128950:attempt:2"
+    }
+  },
+  "completed_at": "2026-04-01T19:26:08.803Z",
+  "download": {
+    "total": 2,
+    "downloaded": 2,
+    "skipped_existing": 0,
+    "failed": 0,
+    "processed": 2,
+    "stopped_early": false
+  },
+  "aggregate": {
+    "profiles_written_to_ndjson": 2,
+    "profiles_missing_json": 0,
+    "details_ndjson": "D:\\Work\\braintrust\\test_safe_download\\profiles.ndjson",
+    "flat_csv": "D:\\Work\\braintrust\\test_safe_download\\profiles_flat.csv"
+  },
+  "invalid_rows_preview": []
+}
