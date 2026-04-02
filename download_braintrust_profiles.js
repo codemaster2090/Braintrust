@@ -45,6 +45,7 @@ const DEFAULT_MULLVAD_PROXY_COUNTRY = "auto";
 const DEFAULT_MULLVAD_PROXY_MAX_RELAYS = 32;
 const DEFAULT_MULLVAD_PROXY_MAX_INFLIGHT = 2;
 const DEFAULT_HIGH_SPEED_MODE = false;
+const DEFAULT_SPEED_MULTIPLIER = 1;
 const DEFAULT_MONGO_URI =
   process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb://localhost:27017/";
 const DEFAULT_MONGO_DB = process.env.MONGO_DB || "braintrust";
@@ -100,7 +101,7 @@ async function main() {
   try {
     vpnController = await createVpnController(options);
     proxyController = await createMullvadProxyController(options, vpnController);
-    applyHighSpeedTuning(options, proxyController);
+    applySpeedTuning(options, proxyController);
     rateController = createRateController(options, vpnController, proxyController);
     mongoSink = await createMongoSink(options);
 
@@ -313,6 +314,7 @@ function parseArgs(argv) {
     mullvadProxyMaxRelays: DEFAULT_MULLVAD_PROXY_MAX_RELAYS,
     mullvadProxyMaxInFlight: DEFAULT_MULLVAD_PROXY_MAX_INFLIGHT,
     highSpeedMode: DEFAULT_HIGH_SPEED_MODE,
+    speedMultiplier: DEFAULT_SPEED_MULTIPLIER,
     mongoUri: DEFAULT_MONGO_URI,
     mongoDb: DEFAULT_MONGO_DB,
     mongoCollection: DEFAULT_MONGO_COLLECTION,
@@ -329,6 +331,7 @@ function parseArgs(argv) {
     minRequestGapExplicit: false,
     retriesExplicit: false,
     logEveryExplicit: false,
+    speedMultiplierExplicit: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -405,6 +408,10 @@ function parseArgs(argv) {
         break;
       case "retry-base-ms":
         options.retryBaseMs = toPositiveInteger(nextValue, "--retry-base-ms");
+        break;
+      case "speed-multiplier":
+        options.speedMultiplier = toSpeedMultiplier(nextValue, "--speed-multiplier");
+        options.speedMultiplierExplicit = true;
         break;
       case "log-every":
         options.logEvery = toPositiveInteger(nextValue, "--log-every");
@@ -535,6 +542,7 @@ Options:
   --timeout-ms <n>        Per-request timeout in milliseconds. Default: ${DEFAULT_TIMEOUT_MS}
   --retries <n>           Retries for 429/5xx/network errors. Default: ${DEFAULT_RETRIES}
   --retry-base-ms <n>     Base backoff in milliseconds. Default: ${DEFAULT_RETRY_BASE_MS}
+  --speed-multiplier <n>  Target throughput multiplier vs the default scheduler. Default: ${DEFAULT_SPEED_MULTIPLIER}
   --log-every <n>         Progress log cadence. Default: ${DEFAULT_LOG_EVERY}
   --max-errors <n>        Stop after this many failed profiles. Default: ${DEFAULT_MAX_ERRORS}
   --min-request-gap-ms    Minimum delay between request starts. Default: ${DEFAULT_MIN_REQUEST_GAP_MS}
@@ -571,6 +579,7 @@ Options:
 
 Examples:
   node download_braintrust_profiles.js --input braintrust_developers_2026-04-01T17-58-21-624Z_filtered.csv
+  node download_braintrust_profiles.js --speed-multiplier 10 --mullvad-proxy-country any
   node download_braintrust_profiles.js --concurrency 6 --limit 500
   node download_braintrust_profiles.js --concurrency 1 --min-request-gap-ms 1500
   node download_braintrust_profiles.js --high-speed --mullvad-proxy-country any --mullvad-proxy-max-relays 48
@@ -582,32 +591,43 @@ Examples:
   `);
 }
 
-function applyHighSpeedTuning(options, proxyController) {
-  if (!options.highSpeedMode || !proxyController) {
+function applySpeedTuning(options, proxyController) {
+  const wantsMultiplier = options.speedMultiplier > 1;
+  const wantsHighSpeed = Boolean(options.highSpeedMode);
+
+  if (!wantsMultiplier && !wantsHighSpeed) {
     return;
   }
 
-  const proxySummary = proxyController.getSummary();
+  const proxySummary = proxyController ? proxyController.getSummary() : null;
   const candidateCount = Math.max(1, Number(proxySummary?.candidate_count) || 1);
+  const maxInFlightPerProxy = Math.max(1, options.mullvadProxyMaxInFlight);
+  const proxyCapacity = Math.max(1, candidateCount * maxInFlightPerProxy);
+  const defaultStartRate = 1000 / DEFAULT_MIN_REQUEST_GAP_MS;
+  const targetStartRate = defaultStartRate * Math.max(1, options.speedMultiplier);
+  const targetGapMs = Math.max(0, Math.floor(DEFAULT_MIN_REQUEST_GAP_MS / options.speedMultiplier));
+  const targetConcurrency = clampNumber(
+    Math.ceil(Math.max(options.speedMultiplier * DEFAULT_CONCURRENCY * 2, targetStartRate * 2)),
+    4,
+    Math.max(4, Math.min(proxyCapacity, 64))
+  );
 
   if (!options.concurrencyExplicit) {
-    options.concurrency = clampNumber(
-      candidateCount * Math.max(1, options.mullvadProxyMaxInFlight),
-      8,
-      32
-    );
+    options.concurrency = wantsHighSpeed
+      ? clampNumber(proxyCapacity, 8, 32)
+      : targetConcurrency;
   }
 
   if (!options.minRequestGapExplicit) {
-    options.minRequestGapMs = 0;
+    options.minRequestGapMs = wantsHighSpeed ? 0 : targetGapMs;
   }
 
   if (!options.retriesExplicit) {
-    options.retries = Math.max(options.retries, 8);
+    options.retries = Math.max(options.retries, wantsHighSpeed ? 8 : 6);
   }
 
   if (!options.logEveryExplicit) {
-    options.logEvery = Math.max(options.logEvery, 100);
+    options.logEvery = Math.max(options.logEvery, wantsHighSpeed ? 100 : 50);
   }
 }
 
@@ -634,6 +654,14 @@ function toNonNegativeInteger(value, label) {
   const parsed = Number.parseInt(String(value), 10);
   if (!Number.isInteger(parsed) || parsed < 0) {
     throw new Error(`${label} must be a non-negative integer.`);
+  }
+  return parsed;
+}
+
+function toSpeedMultiplier(value, label) {
+  const parsed = Number.parseFloat(String(value));
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    throw new Error(`${label} must be a number greater than or equal to 1.`);
   }
   return parsed;
 }
@@ -2424,6 +2452,7 @@ function sanitizeOptionsForManifest(options) {
     timeout_ms: options.timeoutMs,
     retries: options.retries,
     retry_base_ms: options.retryBaseMs,
+    speed_multiplier: options.speedMultiplier,
     log_every: options.logEvery,
     max_errors: options.maxErrors,
     min_request_gap_ms: options.minRequestGapMs,
