@@ -8,6 +8,7 @@
     "download": "node download_braintrust_profiles.js"
   },
   "dependencies": {
-    "mongodb": "^7.1.1"
+    "mongodb": "^7.1.1",
+    "socks-proxy-agent": "^10.0.0"
   }
 }

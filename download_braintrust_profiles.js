@@ -3,11 +3,14 @@
 
 const fs = require("fs");
 const fsp = fs.promises;
+const http = require("http");
+const https = require("https");
 const path = require("path");
 const { execFile } = require("child_process");
 const { promisify } = require("util");
 let MongoClient;
 const execFileAsync = promisify(execFile);
+let SocksProxyAgentClass = null;
 
 try {
   ({ MongoClient } = require("mongodb"));
@@ -35,6 +38,13 @@ const DEFAULT_MULLVAD_ROTATE_ON_RATE_LIMIT = true;
 const DEFAULT_MULLVAD_RECONNECT_ATTEMPTS = 4;
 const DEFAULT_MULLVAD_RECONNECT_TIMEOUT_MS = 120000;
 const DEFAULT_MULLVAD_SETTLE_MS = 5000;
+const DEFAULT_MULLVAD_PROXY_MODE = true;
+const DEFAULT_MULLVAD_PROXY_HOST = "10.64.0.1";
+const DEFAULT_MULLVAD_PROXY_PORT = 1080;
+const DEFAULT_MULLVAD_PROXY_COUNTRY = "auto";
+const DEFAULT_MULLVAD_PROXY_MAX_RELAYS = 32;
+const DEFAULT_MULLVAD_PROXY_MAX_INFLIGHT = 2;
+const DEFAULT_HIGH_SPEED_MODE = false;
 const DEFAULT_MONGO_URI =
   process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb://localhost:27017/";
 const DEFAULT_MONGO_DB = process.env.MONGO_DB || "braintrust";
@@ -84,11 +94,14 @@ async function main() {
   let mongoSink = null;
   const stopController = createStopController();
   let vpnController = null;
+  let proxyController = null;
   let rateController = null;
 
   try {
     vpnController = await createVpnController(options);
-    rateController = createRateController(options, vpnController);
+    proxyController = await createMullvadProxyController(options, vpnController);
+    applyHighSpeedTuning(options, proxyController);
+    rateController = createRateController(options, vpnController, proxyController);
     mongoSink = await createMongoSink(options);
 
     const runStartedAt = new Date().toISOString();
@@ -113,6 +126,7 @@ async function main() {
       mongo: mongoSink ? mongoSink.getSummary() : { enabled: false },
       throttle: rateController.getSummary(),
       vpn: vpnController ? vpnController.getSummary() : { enabled: false },
+      proxy: proxyController ? proxyController.getSummary() : { enabled: false },
       resume: resumeState.summary,
     };
 
@@ -158,6 +172,7 @@ async function main() {
         mongoSink,
         rateController,
         vpnController,
+        proxyController,
         stopController,
         startIndex: resumeState.startIndex,
       });
@@ -198,6 +213,7 @@ async function main() {
       mongo: mongoSink ? mongoSink.getSummary() : { enabled: false },
       throttle: rateController.getSummary(),
       vpn: vpnController ? vpnController.getSummary() : { enabled: false },
+      proxy: proxyController ? proxyController.getSummary() : { enabled: false },
       invalid_rows_preview: parsed.invalidRows.slice(0, 25),
     };
 
@@ -217,6 +233,7 @@ async function main() {
       mongo: mongoSink ? mongoSink.getSummary() : null,
       throttle: rateController.getSummary(),
       vpn: vpnController ? vpnController.getSummary() : null,
+      proxy: proxyController ? proxyController.getSummary() : null,
     });
     await writeJsonAtomic(manifestFile, finalManifest);
 
@@ -245,6 +262,12 @@ async function main() {
       const vpnSummary = vpnController.getSummary();
       console.log(
         `VPN:           rotations=${vpnSummary.rotations_completed}, current_ip=${vpnSummary.current_ip || "unknown"}`
+      );
+    }
+    if (proxyController) {
+      const proxySummary = proxyController.getSummary();
+      console.log(
+        `Proxy:         ${proxySummary.current_proxy_label || "none"} | remote_rotations=${proxySummary.remote_rotations_completed}`
       );
     }
     console.log(`NDJSON:        ${detailsNdjsonFile}`);
@@ -283,6 +306,13 @@ function parseArgs(argv) {
     mullvadReconnectAttempts: DEFAULT_MULLVAD_RECONNECT_ATTEMPTS,
     mullvadReconnectTimeoutMs: DEFAULT_MULLVAD_RECONNECT_TIMEOUT_MS,
     mullvadSettleMs: DEFAULT_MULLVAD_SETTLE_MS,
+    mullvadProxyMode: DEFAULT_MULLVAD_PROXY_MODE,
+    mullvadProxyHost: DEFAULT_MULLVAD_PROXY_HOST,
+    mullvadProxyPort: DEFAULT_MULLVAD_PROXY_PORT,
+    mullvadProxyCountry: DEFAULT_MULLVAD_PROXY_COUNTRY,
+    mullvadProxyMaxRelays: DEFAULT_MULLVAD_PROXY_MAX_RELAYS,
+    mullvadProxyMaxInFlight: DEFAULT_MULLVAD_PROXY_MAX_INFLIGHT,
+    highSpeedMode: DEFAULT_HIGH_SPEED_MODE,
     mongoUri: DEFAULT_MONGO_URI,
     mongoDb: DEFAULT_MONGO_DB,
     mongoCollection: DEFAULT_MONGO_COLLECTION,
@@ -295,6 +325,10 @@ function parseArgs(argv) {
     help: false,
     cookie: process.env.BRAINTRUST_COOKIE || "",
     cookieFile: "",
+    concurrencyExplicit: false,
+    minRequestGapExplicit: false,
+    retriesExplicit: false,
+    logEveryExplicit: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -330,6 +364,16 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--no-mullvad-proxy") {
+      options.mullvadProxyMode = false;
+      continue;
+    }
+
+    if (arg === "--high-speed") {
+      options.highSpeedMode = true;
+      continue;
+    }
+
     if (!arg.startsWith("--")) {
       throw new Error(`Unexpected argument: ${arg}`);
     }
@@ -350,24 +394,28 @@ function parseArgs(argv) {
         break;
       case "concurrency":
         options.concurrency = toPositiveInteger(nextValue, "--concurrency");
+        options.concurrencyExplicit = true;
         break;
       case "timeout-ms":
         options.timeoutMs = toPositiveInteger(nextValue, "--timeout-ms");
         break;
       case "retries":
         options.retries = toNonNegativeInteger(nextValue, "--retries");
+        options.retriesExplicit = true;
         break;
       case "retry-base-ms":
         options.retryBaseMs = toPositiveInteger(nextValue, "--retry-base-ms");
         break;
       case "log-every":
         options.logEvery = toPositiveInteger(nextValue, "--log-every");
+        options.logEveryExplicit = true;
         break;
       case "max-errors":
         options.maxErrors = toPositiveInteger(nextValue, "--max-errors");
         break;
       case "min-request-gap-ms":
         options.minRequestGapMs = toNonNegativeInteger(nextValue, "--min-request-gap-ms");
+        options.minRequestGapExplicit = true;
         break;
       case "max-request-gap-ms":
         options.maxRequestGapMs = toPositiveInteger(nextValue, "--max-request-gap-ms");
@@ -408,6 +456,24 @@ function parseArgs(argv) {
       case "mullvad-settle-ms":
         options.mullvadSettleMs = toNonNegativeInteger(nextValue, "--mullvad-settle-ms");
         break;
+      case "mullvad-proxy-host":
+        options.mullvadProxyHost = nextValue;
+        break;
+      case "mullvad-proxy-port":
+        options.mullvadProxyPort = toPositiveInteger(nextValue, "--mullvad-proxy-port");
+        break;
+      case "mullvad-proxy-country":
+        options.mullvadProxyCountry = nextValue.toLowerCase();
+        break;
+      case "mullvad-proxy-max-relays":
+        options.mullvadProxyMaxRelays = toPositiveInteger(nextValue, "--mullvad-proxy-max-relays");
+        break;
+      case "mullvad-proxy-max-inflight":
+        options.mullvadProxyMaxInFlight = toPositiveInteger(
+          nextValue,
+          "--mullvad-proxy-max-inflight"
+        );
+        break;
       case "mongo-uri":
         options.mongoUri = nextValue;
         break;
@@ -447,6 +513,13 @@ function parseArgs(argv) {
     );
   }
 
+  if (
+    !["auto", "any"].includes(options.mullvadProxyCountry) &&
+    !/^[a-z]{2}$/.test(options.mullvadProxyCountry)
+  ) {
+    throw new Error("--mullvad-proxy-country must be auto, any, or a two-letter country code.");
+  }
+
   return options;
 }
 
@@ -471,6 +544,13 @@ Options:
   --transient-error-cooldown-ms  Shared pause after network/5xx issues. Default: ${DEFAULT_TRANSIENT_ERROR_COOLDOWN_MS}
   --no-resume              Ignore saved checkpoint and start from the beginning.
   --resume-lookback <n>    Recheck the last N indices before saved position. Default: ${DEFAULT_RESUME_LOOKBACK}
+  --high-speed             Auto-tune for maximum proxy throughput while isolating rate-limited exits.
+  --no-mullvad-proxy       Disable Mullvad SOCKS5 proxy mode.
+  --mullvad-proxy-host <host>  Local Mullvad SOCKS5 host. Default: ${DEFAULT_MULLVAD_PROXY_HOST}
+  --mullvad-proxy-port <n> Local/remote Mullvad SOCKS5 port. Default: ${DEFAULT_MULLVAD_PROXY_PORT}
+  --mullvad-proxy-country <code|auto|any>  Remote SOCKS5 relay country selection. Default: ${DEFAULT_MULLVAD_PROXY_COUNTRY}
+  --mullvad-proxy-max-relays <n>  Max remote SOCKS5 relays to keep in rotation. Default: ${DEFAULT_MULLVAD_PROXY_MAX_RELAYS}
+  --mullvad-proxy-max-inflight <n>  Max concurrent requests per proxy exit. Default: ${DEFAULT_MULLVAD_PROXY_MAX_INFLIGHT}
   --no-mullvad-rotate      Disable Mullvad IP rotation on rate limits.
   --mullvad-command <cmd>  Mullvad CLI command. Default: ${DEFAULT_MULLVAD_COMMAND}
   --mullvad-reconnect-attempts <n>  Mullvad reconnect attempts per rotation. Default: ${DEFAULT_MULLVAD_RECONNECT_ATTEMPTS}
@@ -493,11 +573,42 @@ Examples:
   node download_braintrust_profiles.js --input braintrust_developers_2026-04-01T17-58-21-624Z_filtered.csv
   node download_braintrust_profiles.js --concurrency 6 --limit 500
   node download_braintrust_profiles.js --concurrency 1 --min-request-gap-ms 1500
+  node download_braintrust_profiles.js --high-speed --mullvad-proxy-country any --mullvad-proxy-max-relays 48
+  node download_braintrust_profiles.js --mullvad-proxy-country us --mullvad-proxy-max-relays 24
   node download_braintrust_profiles.js --resume-lookback 50
   node download_braintrust_profiles.js --mongo-uri mongodb://localhost:27017/ --mongo-db braintrust --mongo-collection profiles
   node download_braintrust_profiles.js --out ./run_01 --force
   node download_braintrust_profiles.js --summary-only --out ./braintrust_profile_details
   `);
+}
+
+function applyHighSpeedTuning(options, proxyController) {
+  if (!options.highSpeedMode || !proxyController) {
+    return;
+  }
+
+  const proxySummary = proxyController.getSummary();
+  const candidateCount = Math.max(1, Number(proxySummary?.candidate_count) || 1);
+
+  if (!options.concurrencyExplicit) {
+    options.concurrency = clampNumber(
+      candidateCount * Math.max(1, options.mullvadProxyMaxInFlight),
+      8,
+      32
+    );
+  }
+
+  if (!options.minRequestGapExplicit) {
+    options.minRequestGapMs = 0;
+  }
+
+  if (!options.retriesExplicit) {
+    options.retries = Math.max(options.retries, 8);
+  }
+
+  if (!options.logEveryExplicit) {
+    options.logEvery = Math.max(options.logEvery, 100);
+  }
 }
 
 function detectDefaultInput() {
@@ -715,6 +826,7 @@ async function downloadProfiles(params) {
     mongoSink,
     rateController,
     vpnController,
+    proxyController,
     stopController,
     startIndex,
   } = params;
@@ -745,6 +857,7 @@ async function downloadProfiles(params) {
     mongo: mongoSink ? mongoSink.getSummary() : null,
     throttle: rateController.getSummary(),
     vpn: vpnController ? vpnController.getSummary() : null,
+    proxy: proxyController ? proxyController.getSummary() : null,
   });
 
   const workers = Array.from({ length: options.concurrency }, (_, workerIndex) =>
@@ -797,6 +910,7 @@ async function downloadProfiles(params) {
           retryBaseMs: options.retryBaseMs,
           cookieHeader,
           rateController,
+          proxyController,
         });
 
         const wrapper = {
@@ -811,6 +925,8 @@ async function downloadProfiles(params) {
             etag: result.etag,
             last_modified: result.lastModified,
             content_type: result.contentType,
+            proxy_label: result.proxyLabel,
+            proxy_uri: result.proxyUri,
           },
           sources: profileEntry.sources,
           profile: result.data,
@@ -870,12 +986,14 @@ async function downloadProfiles(params) {
       mongo: mongoSink ? mongoSink.getSummary() : null,
       throttle: rateController.getSummary(),
       vpn: vpnController ? vpnController.getSummary() : null,
+      proxy: proxyController ? proxyController.getSummary() : null,
     };
 
     await writeJsonAtomic(progressFile, payload);
     const throttle = payload.throttle || {};
+    const proxy = payload.proxy || {};
     console.log(
-      `[progress] ${summary.processed}/${summary.total} processed | downloaded=${summary.downloaded} skipped=${summary.skipped_existing} failed=${summary.failed} | gap=${throttle.current_request_gap_ms || 0}ms pause=${throttle.pause_remaining_ms || 0}ms rateLimits=${throttle.rate_limit_hits || 0}`
+      `[progress] ${summary.processed}/${summary.total} processed | downloaded=${summary.downloaded} skipped=${summary.skipped_existing} failed=${summary.failed} | gap=${throttle.current_request_gap_ms || 0}ms pause=${throttle.pause_remaining_ms || 0}ms rateLimits=${throttle.rate_limit_hits || 0} | proxy=${proxy.current_proxy_label || "none"} inflight=${proxy.inflight_total || 0}/${proxy.candidate_count || 0}`
     );
   }
 
@@ -1224,7 +1342,280 @@ async function createVpnController(options) {
   };
 }
 
-function createRateController(options, vpnController) {
+async function createMullvadProxyController(options, vpnController) {
+  if (!options.mullvadProxyMode) {
+    return null;
+  }
+
+  await runCommand(options.mullvadCommand, ["version"], options.mullvadReconnectTimeoutMs);
+
+  const status = vpnController
+    ? await getMullvadStatus(options)
+    : await getMullvadStatus(options).catch(() => null);
+  const SocksProxyAgent = await getSocksProxyAgentClass();
+
+  if (!status || !status.connected) {
+    throw new Error(
+      "Mullvad SOCKS5 proxy mode requires Mullvad to be connected. Connect Mullvad first or use --no-mullvad-proxy."
+    );
+  }
+
+  const countryFilter = resolveMullvadProxyCountry(options, status);
+  const relayCodes = await getMullvadWireGuardRelayCodes(options, countryFilter);
+  const remoteRelayCodes = shuffleArray(
+    relayCodes.filter((code) => code !== status.relay_code)
+  ).slice(0, options.mullvadProxyMaxRelays);
+
+  const candidates = [
+    createProxyCandidate({
+      key: "local",
+      label: `local:${options.mullvadProxyHost}:${options.mullvadProxyPort}`,
+      uri: buildSocksProxyUri(options.mullvadProxyHost, options.mullvadProxyPort),
+      remote: false,
+      relayCode: status.relay_code,
+      SocksProxyAgent,
+    }),
+    ...remoteRelayCodes.map((relayCode) =>
+      createProxyCandidate({
+        key: `remote:${relayCode}`,
+        label: relayCode,
+        uri: buildSocksProxyUri(toMullvadSocksHostname(relayCode), options.mullvadProxyPort),
+        remote: true,
+        relayCode,
+        SocksProxyAgent,
+      })
+    ),
+  ];
+
+  let nextCandidateIndex = 0;
+
+  const summary = {
+    enabled: true,
+    country_filter: countryFilter,
+    candidate_count: candidates.length,
+    remote_candidate_count: remoteRelayCodes.length,
+    max_inflight_per_proxy: options.mullvadProxyMaxInFlight,
+    inflight_total: 0,
+    current_proxy_label: candidates[0]?.label || null,
+    current_proxy_uri: candidates[0]?.uri || null,
+    remote_rotations_completed: 0,
+    rate_limit_bans: 0,
+    last_rate_limited_proxy: null,
+    last_proxy_error: null,
+    last_event: null,
+  };
+
+  return {
+    async waitForReady() {
+      return;
+    },
+
+    async acquire(label) {
+      const candidate = await selectAvailableProxy();
+      candidate.inFlight += 1;
+      candidate.totalLeases += 1;
+      candidate.lastUsedAt = new Date().toISOString();
+      summary.inflight_total = getInFlightTotal();
+      summary.current_proxy_label = candidate.label;
+      summary.current_proxy_uri = candidate.uri;
+      summary.last_event = {
+        type: "acquire_proxy",
+        at: candidate.lastUsedAt,
+        label,
+        proxy: candidate.label,
+      };
+      return candidate;
+    },
+
+    release(candidate) {
+      if (!candidate) {
+        return;
+      }
+      candidate.inFlight = Math.max(0, candidate.inFlight - 1);
+      summary.inflight_total = getInFlightTotal();
+    },
+
+    noteSuccess(candidate) {
+      if (!candidate) {
+        return;
+      }
+      candidate.successes += 1;
+      candidate.lastSucceededAt = new Date().toISOString();
+    },
+
+    async handleRateLimit(error, meta) {
+      const candidate = candidates.find((item) => item.key === meta?.proxyKey);
+      if (!candidate) {
+        return candidates.length > 1;
+      }
+
+      const banMs = Math.max(options.rateLimitCooldownMs, error?.retryAfterMs || 0);
+      candidate.cooldownUntil = Date.now() + banMs;
+      candidate.rateLimitHits += 1;
+      summary.rate_limit_bans += 1;
+      summary.last_rate_limited_proxy = candidate.label;
+      summary.last_event = {
+        type: "proxy_ban",
+        at: new Date().toISOString(),
+        proxy: candidate.label,
+        cooldown_ms: banMs,
+        status: error?.status ?? null,
+      };
+
+      if (candidates.some((item) => item.key !== candidate.key)) {
+        summary.remote_rotations_completed += 1;
+        nextCandidateIndex = (candidates.findIndex((item) => item.key === candidate.key) + 1) % candidates.length;
+        return true;
+      }
+
+      return false;
+    },
+
+    noteProxyError(candidate, error) {
+      if (!candidate) {
+        return;
+      }
+      candidate.errorHits += 1;
+      candidate.cooldownUntil = Math.max(
+        candidate.cooldownUntil,
+        Date.now() + Math.max(5000, Math.min(options.transientErrorCooldownMs, 60000))
+      );
+      summary.last_proxy_error = {
+        at: new Date().toISOString(),
+        proxy: candidate.label,
+        message: error?.message || String(error),
+      };
+    },
+
+    getSummary() {
+      return {
+        ...summary,
+        candidates_preview: candidates.slice(0, 5).map((candidate) => ({
+          label: candidate.label,
+          remote: candidate.remote,
+          relay_code: candidate.relayCode,
+          in_flight: candidate.inFlight,
+          total_leases: candidate.totalLeases,
+          rate_limit_hits: candidate.rateLimitHits,
+          error_hits: candidate.errorHits,
+          cooldown_remaining_ms: Math.max(0, candidate.cooldownUntil - Date.now()),
+        })),
+      };
+    },
+  };
+
+  async function selectAvailableProxy() {
+    while (true) {
+      const now = Date.now();
+      let cooldownWaitMs = Number.POSITIVE_INFINITY;
+      let hasCapacityBlock = false;
+
+      for (let offset = 0; offset < candidates.length; offset += 1) {
+        const index = (nextCandidateIndex + offset) % candidates.length;
+        const candidate = candidates[index];
+
+        if (candidate.cooldownUntil > now) {
+          cooldownWaitMs = Math.min(cooldownWaitMs, candidate.cooldownUntil - now);
+          continue;
+        }
+
+        if (candidate.inFlight >= options.mullvadProxyMaxInFlight) {
+          hasCapacityBlock = true;
+          continue;
+        }
+
+        nextCandidateIndex = (index + 1) % candidates.length;
+        return candidate;
+      }
+
+      const waitMs =
+        cooldownWaitMs !== Number.POSITIVE_INFINITY
+          ? Math.max(50, Math.min(cooldownWaitMs, 500))
+          : hasCapacityBlock
+            ? 50
+            : 250;
+      await sleep(waitMs);
+    }
+  }
+
+  function getInFlightTotal() {
+    return candidates.reduce((total, candidate) => total + candidate.inFlight, 0);
+  }
+}
+
+function createProxyCandidate(params) {
+  return {
+    key: params.key,
+    label: params.label,
+    uri: params.uri,
+    remote: params.remote,
+    relayCode: params.relayCode || null,
+    cooldownUntil: 0,
+    rateLimitHits: 0,
+    errorHits: 0,
+    successes: 0,
+    inFlight: 0,
+    totalLeases: 0,
+    agent: new params.SocksProxyAgent(params.uri),
+  };
+}
+
+function buildSocksProxyUri(host, port) {
+  return `socks5h://${host}:${port}`;
+}
+
+function resolveMullvadProxyCountry(options, status) {
+  if (options.mullvadProxyCountry === "any") {
+    return "any";
+  }
+
+  if (options.mullvadProxyCountry !== "auto") {
+    return options.mullvadProxyCountry;
+  }
+
+  return status?.relay_code?.slice(0, 2) || "any";
+}
+
+async function getMullvadWireGuardRelayCodes(options, countryFilter) {
+  const { stdout } = await runCommand(
+    options.mullvadCommand,
+    ["relay", "list"],
+    options.mullvadReconnectTimeoutMs
+  );
+
+  const relayCodes = Array.from(
+    new Set(
+      String(stdout || "")
+        .split(/\r?\n/)
+        .map((line) => line.match(/^\s+([a-z]{2}-[a-z0-9]+-wg-\d{3})\s+\(/i)?.[1]?.toLowerCase())
+        .filter(Boolean)
+        .filter((relayCode) => countryFilter === "any" || relayCode.startsWith(`${countryFilter}-`))
+    )
+  );
+
+  if (relayCodes.length === 0) {
+    throw new Error(
+      `No Mullvad WireGuard relays found for proxy country filter "${countryFilter}".`
+    );
+  }
+
+  return relayCodes;
+}
+
+function toMullvadSocksHostname(relayCode) {
+  return `${relayCode.replace(/-wg-(\d+)$/i, "-wg-socks5-$1")}.relays.mullvad.net`;
+}
+
+function shuffleArray(items) {
+  const copy = items.slice();
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+  }
+  return copy;
+}
+
+function createRateController(options, vpnController, proxyController) {
   const state = {
     enabled: true,
     minRequestGapMs: options.minRequestGapMs,
@@ -1242,6 +1633,7 @@ function createRateController(options, vpnController) {
     consecutiveSuccesses: 0,
     consecutiveRateLimits: 0,
     rateLimitHits: 0,
+    proxyHandledRateLimitHits: 0,
     transientFailureHits: 0,
     lastEvent: null,
   };
@@ -1258,6 +1650,9 @@ function createRateController(options, vpnController) {
           if (waitMs <= 0) {
             if (vpnController) {
               await vpnController.waitForReady();
+            }
+            if (proxyController) {
+              await proxyController.waitForReady();
             }
 
             const postVpnNow = Date.now();
@@ -1319,6 +1714,7 @@ function createRateController(options, vpnController) {
     },
 
     noteRateLimit(error) {
+      const gapStepMs = Math.max(50, state.minRequestGapMs);
       state.rateLimitHits += 1;
       state.consecutiveRateLimits += 1;
       state.consecutiveSuccesses = 0;
@@ -1332,7 +1728,8 @@ function createRateController(options, vpnController) {
       state.currentRequestGapMs = Math.min(
         state.maxRequestGapMs,
         Math.max(
-          state.currentRequestGapMs + state.minRequestGapMs,
+          gapStepMs,
+          state.currentRequestGapMs + gapStepMs,
           Math.floor(state.currentRequestGapMs * 1.5)
         )
       );
@@ -1354,31 +1751,48 @@ function createRateController(options, vpnController) {
     },
 
     async handleRateLimit(error, meta) {
-      this.noteRateLimit(error);
-
-      if (!vpnController) {
-        return;
+      if (proxyController) {
+        const rotated = await proxyController.handleRateLimit(error, meta).catch(() => false);
+        if (rotated) {
+          state.rateLimitHits += 1;
+          state.proxyHandledRateLimitHits += 1;
+          state.consecutiveSuccesses = 0;
+          state.consecutiveRateLimits = 0;
+          state.lastEvent = {
+            type: "proxy_rate_limit",
+            at: new Date().toISOString(),
+            status: error?.status || null,
+            retry_after_ms: error?.retryAfterMs ?? null,
+            proxy_key: meta?.proxyKey ?? null,
+          };
+          return;
+        }
       }
 
-      try {
-        await vpnController.rotate({
-          reason: "rate_limit",
-          status: error?.status ?? null,
-          retry_after_ms: error?.retryAfterMs ?? null,
-          profile_id: meta?.profileId ?? null,
-          attempt: meta?.attempt ?? null,
-        });
-      } catch (rotationError) {
-        state.lastEvent = {
-          type: "vpn_rotation_failed",
-          at: new Date().toISOString(),
-          message: rotationError?.message || String(rotationError),
-          current_request_gap_ms: state.currentRequestGapMs,
-        };
+      this.noteRateLimit(error);
+
+      if (vpnController) {
+        try {
+          await vpnController.rotate({
+            reason: "rate_limit",
+            status: error?.status ?? null,
+            retry_after_ms: error?.retryAfterMs ?? null,
+            profile_id: meta?.profileId ?? null,
+            attempt: meta?.attempt ?? null,
+          });
+        } catch (rotationError) {
+          state.lastEvent = {
+            type: "vpn_rotation_failed",
+            at: new Date().toISOString(),
+            message: rotationError?.message || String(rotationError),
+            current_request_gap_ms: state.currentRequestGapMs,
+          };
+        }
       }
     },
 
     noteTransientFailure(error) {
+      const gapStepMs = Math.max(100, state.minRequestGapMs);
       state.transientFailureHits += 1;
       state.consecutiveSuccesses = 0;
 
@@ -1389,7 +1803,7 @@ function createRateController(options, vpnController) {
 
       state.currentRequestGapMs = Math.min(
         state.maxRequestGapMs,
-        Math.max(state.minRequestGapMs, state.currentRequestGapMs + 250)
+        Math.max(state.minRequestGapMs, state.currentRequestGapMs + gapStepMs)
       );
       state.lastEvent = {
         type: "transient_failure",
@@ -1415,6 +1829,7 @@ function createRateController(options, vpnController) {
         total_reservations: state.totalReservations,
         total_wait_ms: state.totalWaitMs,
         rate_limit_hits: state.rateLimitHits,
+        proxy_handled_rate_limit_hits: state.proxyHandledRateLimitHits,
         transient_failure_hits: state.transientFailureHits,
         consecutive_rate_limits: state.consecutiveRateLimits,
         last_event: state.lastEvent,
@@ -1424,8 +1839,16 @@ function createRateController(options, vpnController) {
 }
 
 async function fetchProfileWithRetries(params) {
-  const { profileId, apiUrl, timeoutMs, retries, retryBaseMs, cookieHeader, rateController } =
-    params;
+  const {
+    profileId,
+    apiUrl,
+    timeoutMs,
+    retries,
+    retryBaseMs,
+    cookieHeader,
+    rateController,
+    proxyController,
+  } = params;
 
   let attempt = 0;
   let lastError = null;
@@ -1433,9 +1856,13 @@ async function fetchProfileWithRetries(params) {
   while (attempt <= retries) {
     attempt += 1;
     const startedAt = Date.now();
+    let proxyLease = null;
 
     try {
       await rateController.reserve(`profile:${profileId}:attempt:${attempt}`);
+      if (proxyController) {
+        proxyLease = await proxyController.acquire(`profile:${profileId}:attempt:${attempt}`);
+      }
 
       const headers = {
         accept: "application/json, text/plain, */*",
@@ -1446,13 +1873,14 @@ async function fetchProfileWithRetries(params) {
         headers.cookie = cookieHeader;
       }
 
-      const response = await fetch(apiUrl, {
+      const response = await requestText(apiUrl, {
         headers,
-        signal: AbortSignal.timeout(timeoutMs),
+        timeoutMs,
+        agent: proxyLease?.agent || null,
       });
 
-      const contentType = response.headers.get("content-type") || "";
-      const text = await response.text();
+      const contentType = response.headers["content-type"] || "";
+      const text = response.body;
 
       if (!response.ok) {
         const error = new Error(
@@ -1461,7 +1889,7 @@ async function fetchProfileWithRetries(params) {
         error.name = "HttpError";
         error.status = response.status;
         error.responseText = trimPreview(text);
-        error.retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
+        error.retryAfterMs = parseRetryAfter(response.headers["retry-after"]);
         throw error;
       }
 
@@ -1478,6 +1906,9 @@ async function fetchProfileWithRetries(params) {
       }
 
       rateController.noteSuccess();
+      if (proxyController) {
+        proxyController.noteSuccess(proxyLease);
+      }
 
       return {
         data,
@@ -1485,16 +1916,26 @@ async function fetchProfileWithRetries(params) {
         status: response.status,
         durationMs: Date.now() - startedAt,
         fetchedAt: new Date().toISOString(),
-        etag: response.headers.get("etag"),
-        lastModified: response.headers.get("last-modified"),
+        etag: response.headers.etag || null,
+        lastModified: response.headers["last-modified"] || null,
         contentType,
+        proxyLabel: proxyLease?.label || null,
+        proxyUri: proxyLease?.uri || null,
       };
     } catch (error) {
       lastError = error;
 
+      if (proxyController && proxyLease && !isRateLimitError(error)) {
+        proxyController.noteProxyError(proxyLease, error);
+      }
+
       if (isRateLimitError(error)) {
-        await rateController.handleRateLimit(error, { profileId, attempt });
-      } else if (isRetriableError(error)) {
+        await rateController.handleRateLimit(error, {
+          profileId,
+          attempt,
+          proxyKey: proxyLease?.key || null,
+        });
+      } else if (isRetriableError(error) && (!proxyController || !proxyLease)) {
         rateController.noteTransientFailure(error);
       }
 
@@ -1511,6 +1952,10 @@ async function fetchProfileWithRetries(params) {
       });
 
       await sleep(backoffMs);
+    } finally {
+      if (proxyController && proxyLease) {
+        proxyController.release(proxyLease);
+      }
     }
   }
 
@@ -1852,6 +2297,59 @@ async function runCommand(command, args, timeoutMs) {
   }
 }
 
+async function getSocksProxyAgentClass() {
+  if (SocksProxyAgentClass) {
+    return SocksProxyAgentClass;
+  }
+
+  ({ SocksProxyAgent: SocksProxyAgentClass } = await import("socks-proxy-agent"));
+  return SocksProxyAgentClass;
+}
+
+async function requestText(url, options) {
+  const { headers, timeoutMs, agent } = options;
+  const parsedUrl = new URL(url);
+  const transport = parsedUrl.protocol === "https:" ? https : http;
+
+  return await new Promise((resolve, reject) => {
+    const request = transport.request(
+      parsedUrl,
+      {
+        method: "GET",
+        headers,
+        agent: agent || undefined,
+      },
+      (response) => {
+        response.setEncoding("utf8");
+        let body = "";
+
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+
+        response.on("end", () => {
+          resolve({
+            ok: response.statusCode >= 200 && response.statusCode < 300,
+            status: response.statusCode || 0,
+            headers: response.headers || {},
+            body,
+          });
+        });
+      }
+    );
+
+    const handleTimeout = () => {
+      const error = new Error(`Request timed out after ${timeoutMs} ms`);
+      error.name = "TimeoutError";
+      request.destroy(error);
+    };
+
+    request.setTimeout(timeoutMs, handleTimeout);
+    request.on("error", reject);
+    request.end();
+  });
+}
+
 async function getMullvadStatus(options) {
   const { stdout } = await runCommand(
     options.mullvadCommand,
@@ -1864,6 +2362,7 @@ async function getMullvadStatus(options) {
 function parseMullvadStatus(text) {
   const raw = String(text || "").trim();
   const relay = raw.match(/Relay:\s+(.+)$/m)?.[1]?.trim() || null;
+  const relayCode = relay?.match(/^([a-z]{2}-[a-z0-9]+-wg-\d{3})\b/i)?.[1]?.toLowerCase() || null;
   const ipv4 = raw.match(/IPv4:\s+([0-9.]+)/m)?.[1]?.trim() || null;
   const state = raw.split(/\r?\n/, 1)[0]?.trim() || null;
 
@@ -1872,6 +2371,7 @@ function parseMullvadStatus(text) {
     state,
     connected: /^Connected$/i.test(state || ""),
     relay,
+    relay_code: relayCode,
     ipv4,
   };
 }
@@ -1938,6 +2438,13 @@ function sanitizeOptionsForManifest(options) {
     mullvad_reconnect_attempts: options.mullvadReconnectAttempts,
     mullvad_reconnect_timeout_ms: options.mullvadReconnectTimeoutMs,
     mullvad_settle_ms: options.mullvadSettleMs,
+    mullvad_proxy_mode: options.mullvadProxyMode,
+    mullvad_proxy_host: options.mullvadProxyHost,
+    mullvad_proxy_port: options.mullvadProxyPort,
+    mullvad_proxy_country: options.mullvadProxyCountry,
+    mullvad_proxy_max_relays: options.mullvadProxyMaxRelays,
+    mullvad_proxy_max_inflight: options.mullvadProxyMaxInFlight,
+    high_speed_mode: options.highSpeedMode,
     mongo_enabled: options.mongoEnabled,
     mongo_uri: redactMongoUri(options.mongoUri),
     mongo_db: options.mongoDb,
